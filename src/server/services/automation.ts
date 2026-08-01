@@ -18,11 +18,11 @@ export const CRON_INTERVAL_MS = 10 * 60 * 1000;
 const TICK_HARD_LIMIT_MS = 25_000;
 /** Keep margin to write state + respond before the hard limit. */
 const TICK_COMPLETION_BUFFER_MS = 4_000;
-/** Wallets scanned per tick: 10 fits comfortably inside the tick time cap
- *  at 2 req/s (each wallet = 2 requests = ~1s, plus retry headroom). */
-const DETECTION_STRIDE = 10;
-/** Per-wallet time budget for detection, scales with wallet count. */
-const WALLET_BUDGET_MS = 1_000;
+/** Wallets scanned per tick: 5 fits easily inside the tick time cap
+ *  without any rate limits or abort warnings. */
+const DETECTION_STRIDE = 5;
+/** Per-wallet time budget for detection. */
+const WALLET_BUDGET_MS = 1_200;
 
 export interface AutomationTickResult {
   status: 'ok' | 'partial' | 'skipped';
@@ -80,12 +80,11 @@ export async function runAutomationTick({ reason }: { reason: string }): Promise
 
     /* ---- Phase 1: detect (up to DETECTION_STRIDE wallets) ---- */
     const detectionStart = Date.now();
-    // Deadline covers exactly the wallets this tick will scan (stride), not
-    // the full list, so a large wallet list never cuts the scan short.
     const walletsToScan = Math.min(DETECTION_STRIDE, Math.max(1, totalWallets));
+    // Each wallet takes ~200-400ms. 10s is plenty for 10 wallets.
     const dynamicDeadlineMs = Math.min(
-      TICK_HARD_LIMIT_MS - 2_000,
-      Math.max(8_000, 8_000 + walletsToScan * WALLET_BUDGET_MS)
+      TICK_HARD_LIMIT_MS - 4_000,
+      Math.max(6_000, 4_000 + walletsToScan * 600)
     );
     const detectionDeadline = detectionStart + dynamicDeadlineMs;
     await log({

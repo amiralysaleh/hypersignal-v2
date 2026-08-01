@@ -7,10 +7,9 @@
 import { log } from '@/server/services/logs';
 
 const HYPERLIQUID_BASE_URL = 'https://api.hyperliquid.xyz/info';
-// Hyperliquid's public endpoint rate-limits bursts; keep a steady 2 req/s
-// (500ms gap) to avoid retry backoff stalls entirely.
-const MIN_REQUEST_INTERVAL_MS = Math.max(100, Number(process.env.HL_MIN_REQUEST_INTERVAL_MS ?? 500));
-const REQUEST_TIMEOUT_MS = Math.max(3_000, Number(process.env.HL_REQUEST_TIMEOUT_MS ?? 15_000));
+// Hyperliquid public API rate limiter setting
+const MIN_REQUEST_INTERVAL_MS = Math.max(50, Number(process.env.HL_MIN_REQUEST_INTERVAL_MS ?? 200));
+const REQUEST_TIMEOUT_MS = Math.max(2_000, Number(process.env.HL_REQUEST_TIMEOUT_MS ?? 8_000));
 
 export class RequestTimeoutError extends Error {
   constructor(message: string) {
@@ -146,9 +145,9 @@ export interface Fill {
 
 export async function getUserFills(address: string, options: { deadline?: number } = {}): Promise<{ fills: Fill[]; aborted: boolean }> {
   const { deadline } = options;
-  let backoff = 1_000;
+  let backoff = 300;
 
-  for (let attempt = 1; attempt <= 5; attempt++) {
+  for (let attempt = 1; attempt <= 2; attempt++) {
     if (deadline && Date.now() >= deadline) return { fills: [], aborted: true };
 
     try {
@@ -157,8 +156,6 @@ export async function getUserFills(address: string, options: { deadline?: number
       if (response.ok) {
         const fills = Array.isArray(body) ? (body as Fill[]) : [];
         if (fills.length > 0 && fills[0].time < Date.now() - 30 * 60 * 1000) {
-          // Optimization: fills are newest-first; if the newest fill is already
-          // older than the detection window, older ones are too.
           await log({
             level: 'INFO',
             message: `Skipping fills fetch for ${address.slice(0, 6)}... (oldest active window)`,
@@ -171,17 +168,17 @@ export async function getUserFills(address: string, options: { deadline?: number
 
       if (response.status === 429) {
         const retryAfter = parseRetryAfterMs(response.headers.get('retry-after'));
-        const delay = Math.max(backoff, retryAfter ?? 0);
+        const delay = Math.min(Math.max(backoff, retryAfter ?? 0), 1_000);
         registerHyperliquidPenalty(delay);
         await log({
           level: 'WARN',
           message: `userFills rate limited for ${address.slice(0, 6)}...`,
           context: { attempt, delayMs: delay },
         });
-        if (attempt >= 5) break;
+        if (attempt >= 2) break;
         const waitMs = deadline ? Math.min(delay, Math.max(0, deadline - Date.now())) : delay;
         if (waitMs > 0) await sleep(waitMs);
-        backoff = Math.min(Math.max(backoff * 2, delay), 60_000);
+        backoff = Math.min(backoff * 2, 1_000);
         continue;
       }
 
@@ -193,7 +190,7 @@ export async function getUserFills(address: string, options: { deadline?: number
       return { fills: [], aborted: false };
     } catch (error) {
       const isTimeout = error instanceof RequestTimeoutError;
-      if (attempt >= 5) {
+      if (attempt >= 2) {
         await log({
           level: 'ERROR',
           message: `Failed to fetch user fills for ${address.slice(0, 6)}...`,
@@ -207,18 +204,12 @@ export async function getUserFills(address: string, options: { deadline?: number
           message: `userFills timed out for ${address.slice(0, 6)}...`,
           context: { attempt, timeoutMs: REQUEST_TIMEOUT_MS },
         });
-        registerHyperliquidPenalty(REQUEST_TIMEOUT_MS);
-      } else {
-        await log({
-          level: 'WARN',
-          message: `Retrying userFills for ${address.slice(0, 6)}...`,
-          context: { error: error instanceof Error ? error.message : String(error), attempt },
-        });
+        registerHyperliquidPenalty(1_000);
       }
       if (deadline && Date.now() >= deadline) return { fills: [], aborted: true };
       const waitMs = deadline ? Math.min(backoff, Math.max(0, deadline - Date.now())) : backoff;
       if (waitMs > 0) await sleep(waitMs);
-      backoff = Math.min(backoff * 2, 60_000);
+      backoff = Math.min(backoff * 2, 1_000);
     }
   }
 

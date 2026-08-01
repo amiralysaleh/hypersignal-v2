@@ -10,7 +10,7 @@ import { sendTelegramMessage } from './telegram';
 
 const SIGNALS_FILE_PATH = 'signals.json';
 const MAX_STORED_SIGNALS = 200;
-const DETECTION_MAX_WALLETS_PER_RUN = 10;
+const DETECTION_MAX_WALLETS_PER_RUN = 5;
 const COOLDOWN_MS = 2 * 60 * 60 * 1000;
 
 const reader = <T,>(path: string, fallback: T) =>
