@@ -1,0 +1,13 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "hypersignal-demo",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["next", "start"],
+      "port": 3000,
+      "url": "http://localhost:3000",
+      "autoPort": true
+    }
+  ]
+}

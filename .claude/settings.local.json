@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(node -e \"console.log\\(require\\('./package.json'\\).devDependencies\\)\")",
+      "Bash(grep -B2 -A25 \"Could not resolve dependency\\\\|ERESOLVE\" \"C:\\\\Users\\\\Amiraly\\\\AppData\\\\Local\\\\npm-cache\\\\_logs\\\\2026-08-01T03_00_42_335Z-eresolve-report.txt\" 2>/dev/null | head -50)",
+      "Bash(npm install *)",
+      "Bash(npx tsc *)",
+      "Bash(node -e ' *)",
+      "Bash(node -e \"try { console.log\\(require.resolve\\('@cloudflare/workers-types/package.json'\\)\\) } catch\\(e\\){ console.log\\('not installed'\\) }\")",
+      "Bash(DEMO=1 npx next build)",
+      "Bash(tail -60 /tmp/hs-demo.log)",
+      "Bash(curl -s http://localhost:3000/api/runs)",
+      "Bash(curl -s http://localhost:3000/api/wallets)",
+      "Bash(curl -s http://localhost:3000/)"
+    ]
+  }
+}
