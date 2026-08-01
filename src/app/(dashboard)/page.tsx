@@ -14,6 +14,12 @@ import {
   StatBox,
 } from '@/components/pixel/retro-widgets';
 
+const OUTCOME_COLORS: Record<string, string> = {
+  TP: 'bg-px-green',
+  SL: 'bg-px-red',
+  OPEN: 'bg-px-cyan',
+};
+
 export default function DashboardPage() {
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -63,8 +69,8 @@ export default function DashboardPage() {
     <div className="flex flex-col gap-5">
       {/* Stat row */}
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <StatBox label="UNREALIZED ROI" value={`${(data?.totalRoi ?? 0).toFixed(2)}%`} sub={`$${formatUsd(data?.totalPnl ?? 0)} open pnl`} loading={loading} />
-        <StatBox label="WIN RATE" value={data && data.totalClosedSignals === 0 ? 'N/A' : `${(data?.winRate ?? 0).toFixed(1)}%`} sub={`${data?.totalClosedSignals ?? 0} closed`} loading={loading} color="cyan" />
+        <StatBox label="UNREALIZED ROI" value={`${(data?.totalRoi ?? 0).toFixed(2)}%`} sub={`${formatUsd(data?.totalPnl ?? 0)} open pnl`} loading={loading} color="cyan" />
+        <StatBox label="WIN RATE" value={data && data.totalClosedSignals === 0 ? 'N/A' : `${(data?.winRate ?? 0).toFixed(1)}%`} sub={`${data?.totalClosedSignals ?? 0} closed`} loading={loading} color="green" />
         <StatBox label="ACTIVE SIGNALS" value={String(data?.activeSignals ?? 0)} sub="open positions" loading={loading} color="yellow" />
         <StatBox label="TRACKED WALLETS" value={String(data?.trackedWallets ?? 0)} sub="monitored" loading={loading} color="purple" />
       </div>
@@ -74,12 +80,12 @@ export default function DashboardPage() {
         <PixelCard>
           <PixelTitle icon="▚">MONTHLY WIN RATE</PixelTitle>
           <div className="mt-4 flex h-40 items-end gap-2">
-            {chartData.map((d) => (
+            {chartData.map((d, i) => (
               <div key={d.month} className="flex flex-1 flex-col items-center gap-1">
                 <span className="font-mono text-[10px] text-px-cyan">{d.winrate.toFixed(0)}%</span>
                 <div
-                  className={cn('w-full border-2 border-px-dim/50', d.winrate >= 50 ? 'bg-px-green' : 'bg-px-yellow')}
-                  style={{ height: `${Math.max(4, (d.winrate / maxWinrate) * 100)}%` }}
+                  className={cn('w-full border border-px-blue/30 transition-all duration-500', d.winrate >= 50 ? 'bg-px-green' : 'bg-px-yellow')}
+                  style={{ height: `${Math.max(4, (d.winrate / maxWinrate) * 100)}%`, animationDelay: `${i * 80}ms` }}
                 />
                 <span className="font-pixel text-[7px] text-px-gray">{d.month}</span>
               </div>
@@ -88,23 +94,23 @@ export default function DashboardPage() {
           {chartData.length === 0 && <p className="mt-6 text-center text-[12px] text-px-gray">No closed signals yet</p>}
         </PixelCard>
 
-        {/* Outcomes pie-ish */}
+        {/* Outcomes */}
         <PixelCard>
           <PixelTitle icon="◉">SIGNAL OUTCOMES</PixelTitle>
           <div className="mt-4 flex items-center gap-6">
             <div className="grid shrink-0 grid-cols-4 gap-1" aria-hidden>
               {Array.from({ length: 16 }).map((_, i) => {
-                const ratio = outcomes.TP / outcomeTotal;
-                const idx = i % 4 + Math.floor(i / 4) * 4;
+                const tp = Math.round((outcomes.TP / outcomeTotal) * 8);
+                const sl = Math.round((outcomes.SL / outcomeTotal) * 4);
                 const color =
-                  idx < 8 ? (idx < 8 * ratio ? 'bg-px-green' : 'bg-base-700') : idx < 12 ? 'bg-px-yellow' : 'bg-px-red';
-                return <span key={i} className={cn('h-4 w-4 border border-px-dim/40', color)} />;
+                  i < 8 ? (i < tp ? 'bg-px-green' : 'bg-base-600') : i < 12 ? (i - 8 < sl ? 'bg-px-red' : 'bg-base-600') : 'bg-px-cyan/70';
+                return <span key={i} className={cn('h-4 w-4 border border-px-blue/20 transition-colors', color)} />;
               })}
             </div>
             <div className="flex flex-col gap-2 text-[12px]">
               <span className="flex items-center gap-2"><span className="h-2.5 w-2.5 bg-px-green" /> TP {outcomes.TP} <span className="text-px-gray">({((outcomes.TP / closedTotal) * 100).toFixed(0)}% of closed)</span></span>
               <span className="flex items-center gap-2"><span className="h-2.5 w-2.5 bg-px-red" /> SL {outcomes.SL}</span>
-              <span className="flex items-center gap-2"><span className="h-2.5 w-2.5 bg-px-yellow" /> OPEN {outcomes.OPEN}</span>
+              <span className="flex items-center gap-2"><span className="h-2.5 w-2.5 bg-px-cyan" /> OPEN {outcomes.OPEN}</span>
             </div>
           </div>
         </PixelCard>
@@ -119,7 +125,7 @@ export default function DashboardPage() {
             {topPairs.map((p) => (
               <div key={p.pair} className="flex items-center gap-3">
                 <CoinSprite symbol={p.pair} size={28} />
-                <span className="w-14 font-pixel text-[9px] text-px-green">{p.pair}</span>
+                <span className="w-14 font-pixel text-[9px] text-slate-200">{p.pair}</span>
                 <div className="flex flex-1 items-center gap-2">
                   <PixelProgress value={p.signals} max={maxPairSignals} className="flex-1" />
                   <span className="w-16 text-right font-mono text-[10px] text-px-gray">{p.signals} SIG</span>
@@ -133,28 +139,28 @@ export default function DashboardPage() {
         </PixelCard>
 
         <PixelCard>
-          <PixelTitle icon="◈">WALLET CLUSTERS</PixelTitle>
+          <PixelTitle icon="◈" accent="purple">WALLET CLUSTERS</PixelTitle>
           <p className="mt-1 text-[10px] text-px-gray">Wallets that move together (deterministic, no AI)</p>
           <div className="mt-3 flex flex-col gap-3">
             {(data?.walletClusters ?? []).length === 0 && (
               <p className="text-[12px] text-px-gray">No correlated clusters yet. Cluster forms after 2+ co-signals.</p>
             )}
             {(data?.walletClusters ?? []).map((c, i) => (
-              <div key={i} className="border border-px-dim/40 bg-base-700/40 p-2">
+              <div key={i} className="crt-panel--flat p-2 hover:border-px-purple/40 transition-colors">
                 <div className="flex items-center justify-between">
                   <span className="font-pixel text-[8px] text-px-purple">CLUSTER {String(i + 1).padStart(2, '0')}</span>
                   <span className="font-mono text-[10px] text-px-cyan">{c.trades} TOGETHER</span>
                 </div>
                 <div className="mt-1 flex flex-wrap gap-1.5">
                   {c.wallets.map((w) => (
-                    <span key={w} className="border border-px-dim/40 px-1.5 py-0.5 font-mono text-[9px] text-px-gray">
+                    <span key={w} className="border border-px-blue/20 px-1.5 py-0.5 font-mono text-[9px] text-px-gray-light">
                       {shortAddr(w)}
                     </span>
                   ))}
                 </div>
                 <div className="mt-1 flex gap-1.5">
                   {c.coins.map((coin) => (
-                    <span key={coin} className="font-mono text-[9px] text-px-green">{coin}</span>
+                    <span key={coin} className="font-mono text-[9px] text-px-cyan">{coin}</span>
                   ))}
                 </div>
               </div>
@@ -166,7 +172,7 @@ export default function DashboardPage() {
       {/* Standout / attention */}
       <div className="grid gap-5 md:grid-cols-2">
         <PixelCard>
-          <PixelTitle icon="★" className="text-px-green">STANDOUT SIGNALS</PixelTitle>
+          <PixelTitle icon="★" accent="green">STANDOUT SIGNALS</PixelTitle>
           <div className="mt-3 flex flex-col gap-2">
             {(data?.standoutSignals ?? []).length === 0 && <p className="text-[12px] text-px-gray">No winners right now.</p>}
             {(data?.standoutSignals ?? []).map((s) => (
@@ -175,7 +181,7 @@ export default function DashboardPage() {
           </div>
         </PixelCard>
         <PixelCard>
-          <PixelTitle icon="⚠" className="text-px-yellow">NEEDS ATTENTION</PixelTitle>
+          <PixelTitle icon="⚠" accent="yellow">NEEDS ATTENTION</PixelTitle>
           <div className="mt-3 flex flex-col gap-2">
             {(data?.attentionSignals ?? []).length === 0 && <p className="text-[12px] text-px-gray">All open signals holding.</p>}
             {(data?.attentionSignals ?? []).map((s) => (
@@ -191,7 +197,7 @@ export default function DashboardPage() {
         <div className="mt-3 overflow-x-auto">
           <table className="w-full min-w-[520px] border-collapse">
             <thead>
-              <tr className="border-b-2 border-px-dim/40 font-pixel text-[8px] text-px-dim">
+              <tr className="border-b border-px-blue/20 font-pixel text-[8px] text-px-gray">
                 <th className="py-2 text-left">PAIR</th>
                 <th className="py-2 text-left">TYPE</th>
                 <th className="py-2 text-left">WALLETS</th>
@@ -201,10 +207,10 @@ export default function DashboardPage() {
             </thead>
             <tbody>
               {(data?.recentSignals ?? []).map((s, i) => (
-                <tr key={i} className="border-b border-dashed border-px-dim/20 text-[12px]">
+                <tr key={i} className="border-b border-dashed border-px-blue/10 text-[12px] hover:bg-base-700/30 transition-colors">
                   <td className="flex items-center gap-2 py-2">
                     <CoinSprite symbol={s.pair} size={20} animate={false} />
-                    <span className="font-pixel text-[9px] text-px-green">{s.pair}</span>
+                    <span className="font-pixel text-[9px] text-slate-200">{s.pair}</span>
                   </td>
                   <td className={cn('font-pixel text-[8px]', s.type === 'LONG' ? 'text-px-green' : 'text-px-red')}>
                     {s.type}
@@ -256,11 +262,11 @@ function SignalInsightRow({
   positive: boolean;
 }) {
   return (
-    <div className="flex items-center gap-3 border border-px-dim/30 bg-base-700/30 p-2">
+    <div className="crt-panel--flat flex items-center gap-3 p-2 transition-colors">
       <CoinSprite symbol={pair} size={26} />
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
-          <span className="font-pixel text-[8px] text-px-green">{pair}</span>
+          <span className="font-pixel text-[8px] text-slate-200">{pair}</span>
           <span className={cn('font-pixel text-[7px]', type === 'LONG' ? 'text-px-green' : 'text-px-red')}>{type}</span>
         </div>
         <p className="text-[10px] text-px-gray">{formatTimeAgo(timestamp)}</p>
@@ -277,13 +283,13 @@ function StatusChip({ status }: { status: 'OPEN' | 'TP' | 'SL' }) {
   return (
     <span
       className={cn(
-        'inline-block border-2 px-1.5 py-0.5 font-pixel text-[7px]',
-        status === 'OPEN' && 'border-px-cyan text-px-cyan',
-        status === 'TP' && 'border-px-green text-px-green',
-        status === 'SL' && 'border-px-red text-px-red'
+        'chip',
+        status === 'OPEN' && 'chip--cyan',
+        status === 'TP' && 'chip--green',
+        status === 'SL' && 'chip--red'
       )}
     >
-      {status === 'OPEN' ? '■ OPEN' : status === 'TP' ? '★ TP' : '✕ SL'}
+      {status === 'OPEN' ? '● OPEN' : status === 'TP' ? '★ TP' : '✕ SL'}
     </span>
   );
 }

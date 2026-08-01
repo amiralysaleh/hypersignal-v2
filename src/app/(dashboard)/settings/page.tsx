@@ -100,18 +100,18 @@ export default function SettingsPage() {
             onClick={() => applyProfile(key)}
             className={
               profile === key
-                ? 'crt-panel border-px-cyan p-3 text-left shadow-[0_0_12px_rgba(46,230,200,0.2)]'
-                : 'crt-panel p-3 text-left hover:border-px-green/60'
+                ? 'crt-panel border-px-purple/60 p-3 text-left shadow-[0_0_14px_-4px_rgba(167,139,250,0.4)]'
+                : 'crt-panel p-3 text-left hover:border-px-cyan/50'
             }
           >
-            <p className="font-pixel text-[9px] text-px-cyan">{p.label}</p>
+            <p className="font-pixel text-[9px] text-px-purple">{p.label}</p>
             <p className="mt-1 text-[10px] text-px-gray">{p.desc}</p>
           </button>
         ))}
       </div>
 
       <PixelCard>
-        <PixelTitle icon="▤">DETECTION PARAMETERS</PixelTitle>
+        <PixelTitle icon="▤" accent="cyan">DETECTION PARAMETERS</PixelTitle>
         <div className="mt-4 grid gap-4 md:grid-cols-3">
           <Field label="MIN WALLET COUNT (N)" hint="wallets needed for a signal">
             {num('minWalletCount')}
@@ -141,7 +141,7 @@ export default function SettingsPage() {
       </PixelCard>
 
       <PixelCard>
-        <PixelTitle icon="▤">ALERTS</PixelTitle>
+        <PixelTitle icon="▤" accent="yellow">ALERTS</PixelTitle>
         <div className="mt-4 grid gap-4 md:grid-cols-2">
           <Field label="TELEGRAM BOT TOKEN" hint="from @BotFather">
             {text('telegramBotToken')}
@@ -167,7 +167,7 @@ export default function SettingsPage() {
 function Field({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
   return (
     <label className="block">
-      <span className="font-pixel text-[8px] text-px-dim">{label}</span>
+      <span className="font-pixel text-[8px] text-px-gray">{label}</span>
       <span className="mt-0.5 block text-[10px] text-px-gray">{hint}</span>
       <div className="mt-1.5">{children}</div>
     </label>

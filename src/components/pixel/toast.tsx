@@ -23,10 +23,10 @@ const KIND_ICON: Record<ToastKind, string> = {
   info: '▸',
 };
 
-const KIND_COLOR: Record<ToastKind, string> = {
-  ok: 'text-px-green',
-  err: 'text-px-red',
-  info: 'text-px-cyan',
+const KIND_STYLE: Record<ToastKind, string> = {
+  ok: 'border-px-green/60 text-px-green',
+  err: 'border-px-red/60 text-px-red',
+  info: 'border-px-cyan/60 text-px-cyan',
 };
 
 export function PixelToaster({ children }: { children: React.ReactNode }) {
@@ -52,13 +52,14 @@ export function PixelToaster({ children }: { children: React.ReactNode }) {
           <div
             key={t.id}
             className={cn(
-              'crt-panel animate-pixel-in pointer-events-auto flex items-start gap-3 bg-base-800/95 p-3',
-              t.kind === 'err' && 'border-px-red/70 shadow-[0_0_16px_rgba(255,85,85,0.25)]'
+              'crt-panel animate-slide-down pointer-events-auto flex items-start gap-3 bg-base-900/95 px-3 py-3',
+              KIND_STYLE[t.kind],
+              t.kind === 'err' && 'shadow-[0_0_16px_-4px_rgba(248,113,113,0.3)]'
             )}
           >
-            <span className={cn('font-pixel text-[10px]', KIND_COLOR[t.kind])}>{KIND_ICON[t.kind]}</span>
+            <span className={cn('font-pixel text-[10px]', KIND_STYLE[t.kind])}>{KIND_ICON[t.kind]}</span>
             <div className="min-w-0">
-              <p className={cn('font-pixel text-[9px] leading-relaxed', KIND_COLOR[t.kind])}>{t.title}</p>
+              <p className={cn('font-pixel text-[9px] leading-relaxed', KIND_STYLE[t.kind])}>{t.title}</p>
               {t.desc && <p className="mt-1 break-words text-[11px] text-px-gray">{t.desc}</p>}
             </div>
           </div>

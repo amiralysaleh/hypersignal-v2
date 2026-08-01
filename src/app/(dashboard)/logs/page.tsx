@@ -8,10 +8,10 @@ import { usePixelToast } from '@/components/pixel/toast';
 
 const LEVELS = ['INFO', 'WARN', 'ERROR'] as const;
 
-const LEVEL_STYLE: Record<(typeof LEVELS)[number], string> = {
-  INFO: 'text-px-green',
-  WARN: 'text-px-yellow',
-  ERROR: 'text-px-red text-glow-red',
+const LEVEL_STYLE: Record<(typeof LEVELS)[number], { color: string; chip: string }> = {
+  INFO: { color: 'text-px-cyan', chip: 'chip--cyan' },
+  WARN: { color: 'text-px-yellow', chip: 'chip--yellow' },
+  ERROR: { color: 'text-px-red text-glow-red', chip: 'chip--red' },
 };
 
 export default function LogsPage() {
@@ -82,11 +82,7 @@ export default function LogsPage() {
               key={l}
               type="button"
               onClick={() => toggleLevel(l)}
-              className={
-                levels.has(l)
-                  ? cn('border-2 border-px-dim/60 bg-base-700 px-2 py-1 font-pixel text-[8px]', LEVEL_STYLE[l])
-                  : 'border-2 border-px-dim/30 px-2 py-1 font-pixel text-[8px] text-px-gray'
-              }
+              className={cn('filter-chip', levels.has(l) && 'filter-chip--on')}
             >
               {l} {counts[l]}
             </button>
@@ -109,7 +105,7 @@ export default function LogsPage() {
         <PixelLoader label="READING LOGS" />
       ) : filtered.length === 0 ? (
         <PixelCard className="p-8 text-center">
-          <p className="font-pixel text-[9px] text-px-green">
+          <p className="font-pixel text-[9px] text-px-cyan">
             {logs.length === 0 ? 'NO LOG ENTRIES' : 'NO MATCHING ENTRIES'}
           </p>
           <p className="mt-2 text-[11px] text-px-gray">
@@ -121,12 +117,14 @@ export default function LogsPage() {
           {filtered.map((l, i) => (
             <div key={i} className="crt-panel px-3 py-2">
               <div className="flex items-center justify-between gap-3">
-                <span className={cn('font-pixel text-[8px]', LEVEL_STYLE[l.level])}>[{l.level}]</span>
+                <span className={cn('chip', LEVEL_STYLE[l.level].chip)}>[{l.level}]</span>
                 <span className="font-mono text-[10px] text-px-gray">{formatTime(l.timestamp)}</span>
               </div>
-              <p className="mt-1 font-mono text-[11px] leading-relaxed text-px-green">{l.message}</p>
+              <p className={cn('mt-1 font-mono text-[11px] leading-relaxed', LEVEL_STYLE[l.level].color)}>
+                {l.message}
+              </p>
               {l.context && Object.keys(l.context).length > 0 && (
-                <pre className="mt-2 max-h-40 overflow-auto border border-px-dim/30 bg-base-900 p-2 text-[10px] leading-relaxed text-px-gray">
+                <pre className="mt-2 max-h-40 overflow-auto border border-px-blue/20 bg-base-950 p-2 text-[10px] leading-relaxed text-px-gray-light">
                   {JSON.stringify(l.context, null, 2)}
                 </pre>
               )}

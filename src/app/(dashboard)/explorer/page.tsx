@@ -4,7 +4,7 @@ import { useState } from 'react';
 import type { WalletData, WalletPositionView } from '@/lib/types';
 import { api, cn, formatTimeAgo, formatUsd } from '@/lib/utils';
 import { CoinSprite } from '@/components/pixel/coin-sprite';
-import { PixelCard, PixelLoader, PixelTitle, shortAddr, CopyButton, BlinkCursor } from '@/components/pixel/retro-widgets';
+import { PixelCard, PixelLoader, PixelTitle, shortAddr, CopyButton } from '@/components/pixel/retro-widgets';
 import { usePixelToast } from '@/components/pixel/toast';
 
 export default function ExplorerPage() {
@@ -58,8 +58,8 @@ export default function ExplorerPage() {
 
   return (
     <div className="flex flex-col gap-5">
-      <PixelCard className="p-3">
-        <PixelTitle icon="◈" className="text-px-cyan">COIN SCANNER</PixelTitle>
+      <PixelCard className="p-3" glow>
+        <PixelTitle icon="◈" accent="purple">COIN SCANNER</PixelTitle>
         <p className="mt-1 text-[10px] text-px-gray">
           Find tracked wallets holding a position in a coin right now (with reconstructed entry &amp; open time).
         </p>
@@ -71,7 +71,7 @@ export default function ExplorerPage() {
             onChange={(e) => setCoin(e.target.value.toUpperCase())}
             onKeyDown={(e) => e.key === 'Enter' && searchCoin()}
           />
-          <button type="button" className="pixel-btn pixel-btn--cyan px-3 py-2 text-[8px]" onClick={searchCoin} disabled={coinLoading}>
+          <button type="button" className="pixel-btn px-3 py-2 text-[8px]" onClick={searchCoin} disabled={coinLoading}>
             {coinLoading ? 'SCANNING...' : '▶ SCAN'}
           </button>
           {coinResult && (
@@ -93,7 +93,7 @@ export default function ExplorerPage() {
       )}
 
       <PixelCard className="p-3">
-        <PixelTitle icon="▣" className="text-px-yellow">WALLET LOOKUP</PixelTitle>
+        <PixelTitle icon="▣" accent="yellow">WALLET LOOKUP</PixelTitle>
         <p className="mt-1 text-[10px] text-px-gray">Live clearinghouse state for any Hyperliquid address.</p>
         <div className="mt-3 flex flex-wrap items-center gap-2">
           <input
@@ -125,15 +125,15 @@ export default function ExplorerPage() {
           <div className="mt-4 flex flex-col gap-2">
             {walletData.positions.length === 0 && <p className="text-[12px] text-px-gray">No open positions.</p>}
             {walletData.positions.map((p) => (
-              <div key={p.coin} className="flex flex-wrap items-center gap-3 border border-px-dim/30 bg-base-700/30 p-2">
+              <div key={p.coin} className="crt-panel--flat flex flex-wrap items-center gap-3 p-2 transition-colors">
                 <CoinSprite symbol={p.coin} size={30} />
                 <div className="min-w-[90px]">
-                  <span className="font-pixel text-[9px] text-px-green">{p.coin}</span>
+                  <span className="font-pixel text-[9px] text-slate-200">{p.coin}</span>
                   <span className={cn('ml-2 font-pixel text-[8px]', p.side === 'LONG' ? 'text-px-green' : 'text-px-red')}>
                     {p.side}
                   </span>
                 </div>
-                <span className="font-mono text-[11px] text-px-gray">${p.entryPx.toLocaleString(undefined, { maximumFractionDigits: 4 })}</span>
+                <span className="font-mono text-[11px] text-px-gray-light">${p.entryPx.toLocaleString(undefined, { maximumFractionDigits: 4 })}</span>
                 <span className="font-mono text-[11px] text-px-gray">x{p.leverage}</span>
                 <span className="font-mono text-[11px] text-px-gray">sz {p.size.toFixed(3)}</span>
                 <span className="font-mono text-[11px] text-px-cyan">${p.positionValue.toLocaleString(undefined, { maximumFractionDigits: 0 })}</span>
@@ -155,7 +155,7 @@ export default function ExplorerPage() {
 function PositionTable({ title, positions, accent }: { title: string; positions: WalletPositionView[]; accent: 'green' | 'red' }) {
   return (
     <PixelCard className="p-3">
-      <PixelTitle icon={accent === 'green' ? '▲' : '▼'} className={accent === 'green' ? 'text-px-green' : 'text-px-red'}>
+      <PixelTitle icon={accent === 'green' ? '▲' : '▼'} accent={accent === 'green' ? 'green' : 'red'}>
         {title}
       </PixelTitle>
       {positions.length === 0 ? (
@@ -163,12 +163,12 @@ function PositionTable({ title, positions, accent }: { title: string; positions:
       ) : (
         <div className="mt-3 flex flex-col gap-2">
           {positions.map((p) => (
-            <div key={p.address} className="flex flex-wrap items-center gap-2 border border-px-dim/30 bg-base-700/30 p-2 text-[11px]">
+            <div key={p.address} className="crt-panel--flat flex flex-wrap items-center gap-2 p-2 text-[11px] transition-colors">
               <span className="flex min-w-0 flex-1 items-center gap-2">
-                <span className="truncate font-mono text-px-gray">{shortAddr(p.address, 8)}</span>
+                <span className="truncate font-mono text-px-gray-light">{shortAddr(p.address, 8)}</span>
                 <CopyButton text={p.address} />
               </span>
-              <span className="font-mono text-px-green">{p.positionSize}</span>
+              <span className="font-mono text-px-cyan">{p.positionSize}</span>
               <span className="font-mono text-px-gray">@ ${p.entryPrice}</span>
               <span className="font-mono text-px-cyan">${Number(p.positionValue).toLocaleString(undefined, { maximumFractionDigits: 0 })}</span>
               <span className="font-mono text-px-gray">x{p.leverage}</span>
@@ -181,11 +181,11 @@ function PositionTable({ title, positions, accent }: { title: string; positions:
   );
 }
 
-function MiniStat({ label, value, color = 'green' }: { label: string; value: string; color?: 'green' | 'red' }) {
+function MiniStat({ label, value, color = 'cyan' }: { label: string; value: string; color?: 'green' | 'red' | 'cyan' }) {
   return (
-    <div className="border border-px-dim/40 bg-base-700/40 p-2">
-      <p className="font-pixel text-[7px] text-px-dim">{label}</p>
-      <p className={cn('mt-1 font-mono text-[13px]', color === 'green' ? 'text-px-green' : 'text-px-red')}>{value}</p>
+    <div className="crt-panel--flat p-2 transition-colors">
+      <p className="font-pixel text-[7px] text-px-gray">{label}</p>
+      <p className={cn('mt-1 font-mono text-[13px]', color === 'green' ? 'text-px-green' : color === 'red' ? 'text-px-red' : 'text-px-cyan')}>{value}</p>
     </div>
   );
 }

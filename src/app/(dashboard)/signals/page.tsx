@@ -91,11 +91,11 @@ export default function SignalsPage() {
     <div className="flex flex-col gap-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
-          <LiveDot label="SCANNING" />
+          <LiveDot label="SCANNING" color="cyan" />
           <span className="font-mono text-[11px] text-px-gray">{signals.length} SIGNALS · {filtered.length} SHOWN</span>
         </div>
         <div className="flex flex-wrap gap-2">
-          <button type="button" className="pixel-btn pixel-btn--cyan px-3 py-2 text-[8px]" onClick={syncPrices} disabled={syncing}>
+          <button type="button" className="pixel-btn pixel-btn--green px-3 py-2 text-[8px]" onClick={syncPrices} disabled={syncing}>
             {syncing ? 'SYNCING...' : '◈ SYNC PRICES'}
           </button>
           <button type="button" className="pixel-btn px-3 py-2 text-[8px]" onClick={runDetection} disabled={detecting}>
@@ -105,7 +105,7 @@ export default function SignalsPage() {
       </div>
 
       {/* Filters */}
-      <PixelCard className="p-3">
+      <PixelCard className="p-3" lift={false}>
         <div className="flex flex-wrap items-center gap-3">
           <input
             className="pixel-input max-w-[180px] flex-1 sm:flex-none"
@@ -158,7 +158,7 @@ export default function SignalsPage() {
 function FilterGroup({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="flex flex-wrap items-center gap-1.5">
-      <span className="font-pixel text-[7px] text-px-dim">{label}</span>
+      <span className="font-pixel text-[7px] text-px-gray">{label}</span>
       {children}
     </div>
   );
@@ -166,15 +166,7 @@ function FilterGroup({ label, children }: { label: string; children: React.React
 
 function FilterChip({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={
-        active
-          ? 'border-2 border-px-green bg-px-dark px-1.5 py-0.5 font-pixel text-[8px] text-px-green'
-          : 'border-2 border-px-dim/40 bg-base-800 px-1.5 py-0.5 font-pixel text-[8px] text-px-gray hover:text-px-green'
-      }
-    >
+    <button type="button" onClick={onClick} className={active ? 'filter-chip filter-chip--on' : 'filter-chip'}>
       {children}
     </button>
   );
