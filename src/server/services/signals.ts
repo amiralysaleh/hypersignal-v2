@@ -10,7 +10,7 @@ import { sendTelegramMessage } from './telegram';
 
 const SIGNALS_FILE_PATH = 'signals.json';
 const MAX_STORED_SIGNALS = 200;
-const DETECTION_MAX_WALLETS_PER_RUN = 20;
+const DETECTION_MAX_WALLETS_PER_RUN = 10;
 const COOLDOWN_MS = 2 * 60 * 60 * 1000;
 
 const reader = <T,>(path: string, fallback: T) =>
@@ -234,10 +234,10 @@ export async function detectAndSaveSignals(options: DetectOptions = {}): Promise
   const workerState = await readWorkerState();
   const startIndex = workerState.nextWalletIndex % trackedAddresses.length;
   const rotated = [...trackedAddresses.slice(startIndex), ...trackedAddresses.slice(0, startIndex)];
-  const batches: string[][] = [];
-  for (let i = 0; i < rotated.length; i += DETECTION_MAX_WALLETS_PER_RUN) {
-    batches.push(rotated.slice(i, i + DETECTION_MAX_WALLETS_PER_RUN));
-  }
+  // Only scan one batch per tick — the cursor advances so the next tick
+  // continues where this one left off. This keeps every tick inside the
+  // time cap no matter how many wallets are tracked.
+  const batches: string[][] = [rotated.slice(0, DETECTION_MAX_WALLETS_PER_RUN)];
 
   const timeWindowMs = timeWindow * 60 * 1000;
   const now = Date.now();
@@ -264,13 +264,16 @@ export async function detectAndSaveSignals(options: DetectOptions = {}): Promise
   const fillsByWallet: { address: string; fills: Fill[] }[] = [];
   walletLoop: for (const batch of batches) {
     for (const address of batch) {
-      if (Number.isFinite(overallDeadline) && Date.now() >= overallDeadline) {
+      const deadlineExceeded = Number.isFinite(overallDeadline) && Date.now() >= overallDeadline;
+      if (deadlineExceeded) {
         detectionAborted = true;
+        await report('fetch', fillsByWallet.length);
         break walletLoop;
       }
       const result = await getUserFills(address, { deadline: Number.isFinite(overallDeadline) ? overallDeadline : undefined });
       if (result.aborted) {
         detectionAborted = true;
+        await report('fetch', fillsByWallet.length);
         break walletLoop;
       }
       fillsByWallet.push({ address, fills: result.fills });
@@ -278,14 +281,16 @@ export async function detectAndSaveSignals(options: DetectOptions = {}): Promise
     }
   }
 
-  await advanceWorkerWalletCursor({ processedWallets: fillsByWallet.length, totalWallets: trackedAddresses.length });
-  await writeWorkerState({ lastDetectionRunAt: new Date().toISOString(), lastDetectionRunDurationMs: Date.now() - startedAt });
-
   if (detectionAborted) {
-    await log({ level: 'WARN', message: 'Detection aborted early (runtime limit).', context: { processedWallets: fillsByWallet.length } });
+    await advanceWorkerWalletCursor({ processedWallets: fillsByWallet.length, totalWallets: trackedAddresses.length });
+    await writeWorkerState({ lastDetectionRunAt: new Date().toISOString(), lastDetectionRunDurationMs: Date.now() - startedAt });
+    await log({ level: 'WARN', message: 'Detection aborted early (runtime limit).', context: { processedWallets: fillsByWallet.length, totalWallets: trackedAddresses.length } });
     await report('complete', fillsByWallet.length);
     return;
   }
+
+  await advanceWorkerWalletCursor({ processedWallets: fillsByWallet.length, totalWallets: trackedAddresses.length });
+  await writeWorkerState({ lastDetectionRunAt: new Date().toISOString(), lastDetectionRunDurationMs: Date.now() - startedAt });
 
   /* Phase 2: cluster opening fills */
   const recentOpeningFills: { address: string; fill: Fill; signalType: SignalDirection }[] = [];

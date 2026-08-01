@@ -7,7 +7,9 @@
 import { log } from '@/server/services/logs';
 
 const HYPERLIQUID_BASE_URL = 'https://api.hyperliquid.xyz/info';
-const MIN_REQUEST_INTERVAL_MS = Math.max(500, Number(process.env.HL_MIN_REQUEST_INTERVAL_MS ?? 1_000));
+// Hyperliquid's public endpoint rate-limits bursts; keep a steady 2 req/s
+// (500ms gap) to avoid retry backoff stalls entirely.
+const MIN_REQUEST_INTERVAL_MS = Math.max(100, Number(process.env.HL_MIN_REQUEST_INTERVAL_MS ?? 500));
 const REQUEST_TIMEOUT_MS = Math.max(3_000, Number(process.env.HL_REQUEST_TIMEOUT_MS ?? 15_000));
 
 export class RequestTimeoutError extends Error {

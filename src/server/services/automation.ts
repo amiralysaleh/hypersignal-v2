@@ -18,7 +18,11 @@ export const CRON_INTERVAL_MS = 10 * 60 * 1000;
 const TICK_HARD_LIMIT_MS = 25_000;
 /** Keep margin to write state + respond before the hard limit. */
 const TICK_COMPLETION_BUFFER_MS = 4_000;
-const DETECTION_STRIDE = 20;
+/** Wallets scanned per tick: 10 fits comfortably inside the tick time cap
+ *  at 2 req/s (each wallet = 2 requests = ~1s, plus retry headroom). */
+const DETECTION_STRIDE = 10;
+/** Per-wallet time budget for detection, scales with wallet count. */
+const WALLET_BUDGET_MS = 1_000;
 
 export interface AutomationTickResult {
   status: 'ok' | 'partial' | 'skipped';
@@ -76,17 +80,37 @@ export async function runAutomationTick({ reason }: { reason: string }): Promise
 
     /* ---- Phase 1: detect (up to DETECTION_STRIDE wallets) ---- */
     const detectionStart = Date.now();
-    const detectionDeadline = detectionStart + 15_000;
+    // Deadline covers exactly the wallets this tick will scan (stride), not
+    // the full list, so a large wallet list never cuts the scan short.
+    const walletsToScan = Math.min(DETECTION_STRIDE, Math.max(1, totalWallets));
+    const dynamicDeadlineMs = Math.min(
+      TICK_HARD_LIMIT_MS - 2_000,
+      Math.max(8_000, 8_000 + walletsToScan * WALLET_BUDGET_MS)
+    );
+    const detectionDeadline = detectionStart + dynamicDeadlineMs;
+    await log({
+      level: 'INFO',
+      message: `Detection budget: ${walletsToScan} wallets, ${dynamicDeadlineMs}ms deadline`,
+    });
     await detectAndSaveSignals({
       deadlineMs: detectionDeadline,
-      onProgress: async ({ processedWallets }) => {
+      onProgress: async ({ processedWallets, aborted }) => {
         await heartbeat();
+        if (aborted && typeof processedWallets === 'number') {
+          await log({
+            level: 'WARN',
+            message: `Detection progress: ${processedWallets}/${totalWallets} wallets scanned before abort.`,
+          });
+        }
       },
     });
 
     const detectionDone = await isDetectionComplete(totalWallets);
     const walletStart = startIndex;
-    const walletsProcessed = Math.min(stride, Math.max(0, totalWallets - startIndex)) || stride;
+    // Exact count of wallets processed this run: cursor moved forward in detectAndSaveSignals.
+    const cursorAfter = (await readWorkerState()).nextWalletIndex;
+    const cursorDelta = (cursorAfter - startIndex + totalWallets) % totalWallets;
+    const walletsProcessed = totalWallets > 0 ? cursorDelta : 0;
     await heartbeat(Date.now() - startedAt);
 
     /* ---- Phase 2: refresh prices (only when detection is caught up) ---- */
@@ -143,6 +167,9 @@ export async function runAutomationTick({ reason }: { reason: string }): Promise
 
 async function isDetectionComplete(totalWallets: number): Promise<boolean> {
   if (totalWallets === 0) return true;
+  // If wallets fit in one stride, a single pass covers everything.
+  if (totalWallets <= DETECTION_STRIDE) return true;
+  // Otherwise, detection is "complete" when the cursor wraps around.
   const state = await readWorkerState();
   return state.nextWalletIndex % totalWallets === 0;
 }
