@@ -8,9 +8,9 @@
     "build": "next build",
     "start": "next start",
     "typecheck": "tsc --noEmit",
-    "preview": "opennextjs-cloudflare build && opennextjs-cloudflare preview",
-    "deploy": "opennextjs-cloudflare build && opennextjs-cloudflare deploy",
-    "upload": "opennextjs-cloudflare build && opennextjs-cloudflare upload",
+    "preview": "opennextjs-cloudflare build && node scripts/patch-cron.mjs && opennextjs-cloudflare preview",
+    "deploy": "opennextjs-cloudflare build && node scripts/patch-cron.mjs && opennextjs-cloudflare deploy",
+    "upload": "opennextjs-cloudflare build && node scripts/patch-cron.mjs && opennextjs-cloudflare upload",
     "db:create": "wrangler d1 create hypersignal",
     "db:migrate": "wrangler d1 execute hypersignal --remote --file=migrations/0001_init.sql",
     "db:migrate:local": "wrangler d1 execute hypersignal --local --file=migrations/0001_init.sql"
