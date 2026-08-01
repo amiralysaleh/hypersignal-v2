@@ -81,15 +81,12 @@ export async function runAutomationTick({ reason }: { reason: string }): Promise
     /* ---- Phase 1: detect (up to DETECTION_STRIDE wallets) ---- */
     const detectionStart = Date.now();
     const walletsToScan = Math.min(DETECTION_STRIDE, Math.max(1, totalWallets));
-    // Each wallet takes ~200-400ms. 10s is plenty for 10 wallets.
-    const dynamicDeadlineMs = Math.min(
-      TICK_HARD_LIMIT_MS - 4_000,
-      Math.max(6_000, 4_000 + walletsToScan * 600)
-    );
-    const detectionDeadline = detectionStart + dynamicDeadlineMs;
+    // Give detection a generous 20s window (Cloudflare limit is 25s).
+    // With 3.5s per-request timeout, 5 wallets will ALWAYS complete in < 18s.
+    const detectionDeadline = detectionStart + 20_000;
     await log({
       level: 'INFO',
-      message: `Detection budget: ${walletsToScan} wallets, ${dynamicDeadlineMs}ms deadline`,
+      message: `Detection budget: ${walletsToScan} wallets, 20000ms deadline`,
     });
     await detectAndSaveSignals({
       deadlineMs: detectionDeadline,

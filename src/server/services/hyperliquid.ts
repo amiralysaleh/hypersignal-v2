@@ -8,8 +8,9 @@ import { log } from '@/server/services/logs';
 
 const HYPERLIQUID_BASE_URL = 'https://api.hyperliquid.xyz/info';
 // Hyperliquid public API rate limiter setting
-const MIN_REQUEST_INTERVAL_MS = Math.max(50, Number(process.env.HL_MIN_REQUEST_INTERVAL_MS ?? 200));
-const REQUEST_TIMEOUT_MS = Math.max(2_000, Number(process.env.HL_REQUEST_TIMEOUT_MS ?? 8_000));
+const MIN_REQUEST_INTERVAL_MS = Math.max(50, Number(process.env.HL_MIN_REQUEST_INTERVAL_MS ?? 150));
+// Fast per-request timeout: if Hyperliquid doesn't answer in 3.5s, drop the wallet for this tick
+const REQUEST_TIMEOUT_MS = Math.max(2_000, Number(process.env.HL_REQUEST_TIMEOUT_MS ?? 3_500));
 
 export class RequestTimeoutError extends Error {
   constructor(message: string) {
