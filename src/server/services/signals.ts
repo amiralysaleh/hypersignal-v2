@@ -292,20 +292,47 @@ export async function detectAndSaveSignals(options: DetectOptions = {}): Promise
   await advanceWorkerWalletCursor({ processedWallets: fillsByWallet.length, totalWallets: trackedAddresses.length });
   await writeWorkerState({ lastDetectionRunAt: new Date().toISOString(), lastDetectionRunDurationMs: Date.now() - startedAt });
 
-  /* Phase 2: cluster opening fills */
-  const recentOpeningFills: { address: string; fill: Fill; signalType: SignalDirection }[] = [];
+  /* Phase 2: accumulate fills across runs & cluster opening fills */
+  const FILLS_STORE_KEY = 'recent-fills.json';
+  interface CachedFillEntry { address: string; fill: Fill }
+  const previousCached = await reader<CachedFillEntry[]>(FILLS_STORE_KEY, []);
+
+  // Clean old cache entries outside time window (1 hour max)
+  const oneHourAgo = now - 60 * 60 * 1000;
+  const filteredCache = previousCached.filter(e => e.fill.time >= oneHourAgo);
+
+  // Merge current batch fills into cache (update/replace by address)
+  const currentAddresses = new Set(fillsByWallet.map(f => f.address.toLowerCase()));
+  const retainedCache = filteredCache.filter(e => !currentAddresses.has(e.address.toLowerCase()));
+
+  const currentFlatFills: CachedFillEntry[] = [];
   for (const { address, fills } of fillsByWallet) {
     for (const fill of fills) {
-      const isRecent = now - fill.time < timeWindowMs;
-      const classification = classifyFillForSignal(fill);
-      if (!isRecent || !classification) continue;
-
-      const wallet = walletsWithCooldown.find((w: { address: string }) => w.address.toLowerCase() === address.toLowerCase());
-      if (!wallet) continue;
-      if (isOnCooldown(wallet, fill.coin, now)) continue;
-
-      recentOpeningFills.push({ address, fill, signalType: classification });
+      currentFlatFills.push({ address, fill });
     }
+  }
+
+  const allAccumulatedFills = [...retainedCache, ...currentFlatFills];
+  await writer(FILLS_STORE_KEY, allAccumulatedFills);
+
+  const ignoredCoins = (settings.ignoredPairs || '')
+    .split(',')
+    .map((s) => s.trim().toUpperCase())
+    .filter(Boolean);
+  const ignoredSet = new Set(ignoredCoins);
+
+  const recentOpeningFills: { address: string; fill: Fill; signalType: SignalDirection }[] = [];
+  for (const { address, fill } of allAccumulatedFills) {
+    if (ignoredSet.has(fill.coin.toUpperCase())) continue;
+    const isRecent = now - fill.time < timeWindowMs;
+    const classification = classifyFillForSignal(fill);
+    if (!isRecent || !classification) continue;
+
+    const wallet = walletsWithCooldown.find((w: { address: string }) => w.address.toLowerCase() === address.toLowerCase());
+    if (!wallet) continue;
+    if (isOnCooldown(wallet, fill.coin, now)) continue;
+
+    recentOpeningFills.push({ address, fill, signalType: classification });
   }
   await report('aggregate', fillsByWallet.length);
 
