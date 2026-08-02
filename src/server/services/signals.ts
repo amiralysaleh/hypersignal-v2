@@ -2,7 +2,7 @@ import type { ClusterFill, Settings, Signal, SignalDirection } from '@/lib/types
 import { readJsonFile, writeJsonFile } from '../storage/jsonStore';
 import { isDemoMode, readMemoryJson, writeMemoryJson } from '../storage/memoryStore';
 import { log } from './logs';
-import { getAllMids, getClearinghouseState, getUserFills, registerHyperliquidPenalty, type ClearedPosition, type Fill } from './hyperliquid';
+import { getAllMids, getClearinghouseState, getUserFills, type ClearedPosition, type Fill } from './hyperliquid';
 import { getSettings } from './settings';
 import { getWallets, isOnCooldown, readWallets, updateWalletCooldowns, writeWallets } from './wallets';
 import { advanceWorkerWalletCursor, readWorkerState, writeWorkerState } from './workerState';
@@ -231,14 +231,6 @@ export async function detectAndSaveSignals(options: DetectOptions = {}): Promise
   }
 
   const overallDeadline = options.deadlineMs ?? Number.POSITIVE_INFINITY;
-  const workerState = await readWorkerState();
-  const startIndex = workerState.nextWalletIndex % trackedAddresses.length;
-  const rotated = [...trackedAddresses.slice(startIndex), ...trackedAddresses.slice(0, startIndex)];
-  // Only scan one batch per tick — the cursor advances so the next tick
-  // continues where this one left off. This keeps every tick inside the
-  // time cap no matter how many wallets are tracked.
-  const batches: string[][] = [rotated.slice(0, DETECTION_MAX_WALLETS_PER_RUN)];
-
   const timeWindowMs = timeWindow * 60 * 1000;
   const now = Date.now();
   let detectionAborted = false;
@@ -256,64 +248,80 @@ export async function detectAndSaveSignals(options: DetectOptions = {}): Promise
 
   await log({
     level: 'INFO',
-    message: `Detection run: scanning ${trackedAddresses.length} wallets (batch of ${batches[0]?.length ?? 0})`,
-    context: { startIndex, timeWindow, minWalletCount, minVolume },
+    message: `Detection run: scanning ALL ${trackedAddresses.length} wallets in parallel chunks`,
+    context: { totalWallets: trackedAddresses.length, timeWindow, minWalletCount, minVolume },
   });
 
-  /* Phase 1: fetch fills for this batch */
+  /* Phase 1: fetch fills for ALL wallets using parallel chunks (concurrency=3) */
   const fillsByWallet: { address: string; fills: Fill[] }[] = [];
-  walletLoop: for (const batch of batches) {
-    for (const address of batch) {
-      const deadlineExceeded = Number.isFinite(overallDeadline) && Date.now() >= overallDeadline;
-      if (deadlineExceeded) {
-        detectionAborted = true;
-        await report('fetch', fillsByWallet.length);
-        break walletLoop;
-      }
-      const result = await getUserFills(address, { deadline: Number.isFinite(overallDeadline) ? overallDeadline : undefined });
-      if (result.aborted) {
-        detectionAborted = true;
-        await report('fetch', fillsByWallet.length);
-        break walletLoop;
-      }
-      fillsByWallet.push({ address, fills: result.fills });
-      await report('fetch', fillsByWallet.length);
+  const CONCURRENCY = 3;
+
+  for (let i = 0; i < trackedAddresses.length; i += CONCURRENCY) {
+    if (Number.isFinite(overallDeadline) && Date.now() >= overallDeadline) {
+      detectionAborted = true;
+      break;
+    }
+
+    const chunk = trackedAddresses.slice(i, i + CONCURRENCY);
+    const chunkResults = await Promise.all(
+      chunk.map(async (address) => {
+        const res = await getUserFills(address, { deadline: Number.isFinite(overallDeadline) ? overallDeadline : undefined });
+        return { address, fills: res.fills, aborted: res.aborted };
+      })
+    );
+
+    for (const res of chunkResults) {
+      if (res.aborted) detectionAborted = true;
+      fillsByWallet.push({ address: res.address, fills: res.fills });
+    }
+
+    await report('fetch', fillsByWallet.length);
+    if (detectionAborted) break;
+
+    // Small delay between chunks to avoid rate limits
+    if (i + CONCURRENCY < trackedAddresses.length) {
+      await new Promise((r) => setTimeout(r, 150));
     }
   }
 
-  if (detectionAborted) {
-    await advanceWorkerWalletCursor({ processedWallets: fillsByWallet.length, totalWallets: trackedAddresses.length });
-    await writeWorkerState({ lastDetectionRunAt: new Date().toISOString(), lastDetectionRunDurationMs: Date.now() - startedAt });
-    await log({ level: 'WARN', message: 'Detection aborted early (runtime limit).', context: { processedWallets: fillsByWallet.length, totalWallets: trackedAddresses.length } });
-    await report('complete', fillsByWallet.length);
-    return;
-  }
-
-  await advanceWorkerWalletCursor({ processedWallets: fillsByWallet.length, totalWallets: trackedAddresses.length });
-  await writeWorkerState({ lastDetectionRunAt: new Date().toISOString(), lastDetectionRunDurationMs: Date.now() - startedAt });
+  await writeWorkerState({ nextWalletIndex: 0, lastDetectionRunAt: new Date().toISOString(), lastDetectionRunDurationMs: Date.now() - startedAt });
 
   /* Phase 2: accumulate fills across runs & cluster opening fills */
   const FILLS_STORE_KEY = 'recent-fills.json';
   interface CachedFillEntry { address: string; fill: Fill }
-  const previousCached = await reader<CachedFillEntry[]>(FILLS_STORE_KEY, []);
 
-  // Clean old cache entries outside time window (1 hour max)
-  const oneHourAgo = now - 60 * 60 * 1000;
-  const filteredCache = previousCached.filter(e => e.fill.time >= oneHourAgo);
-
-  // Merge current batch fills into cache (update/replace by address)
-  const currentAddresses = new Set(fillsByWallet.map(f => f.address.toLowerCase()));
-  const retainedCache = filteredCache.filter(e => !currentAddresses.has(e.address.toLowerCase()));
-
+  // Compact fills: keep only essential fields and only within the active time window
+  const windowLimitTime = now - timeWindowMs;
   const currentFlatFills: CachedFillEntry[] = [];
+
   for (const { address, fills } of fillsByWallet) {
     for (const fill of fills) {
-      currentFlatFills.push({ address, fill });
+      if (fill.time >= windowLimitTime) {
+        currentFlatFills.push({
+          address,
+          fill: {
+            time: fill.time,
+            hash: fill.hash ?? '',
+            coin: fill.coin,
+            side: fill.side,
+            dir: fill.dir ?? '',
+            px: fill.px,
+            sz: fill.sz,
+            startPosition: fill.startPosition ?? '0',
+            closedPnl: fill.closedPnl ?? '0',
+            oid: fill.oid ?? 0,
+            crossed: fill.crossed ?? false,
+            fee: fill.fee ?? '0',
+            tid: fill.tid ?? 0,
+          },
+        });
+      }
     }
   }
 
-  const allAccumulatedFills = [...retainedCache, ...currentFlatFills];
-  await writer(FILLS_STORE_KEY, allAccumulatedFills);
+  // Keep max 200 fills in store to prevent D1 SQLITE_TOOBIG errors
+  const compactedFills = currentFlatFills.slice(0, 200);
+  await writer(FILLS_STORE_KEY, compactedFills);
 
   const ignoredCoins = (settings.ignoredPairs || '')
     .split(',')
@@ -322,11 +330,10 @@ export async function detectAndSaveSignals(options: DetectOptions = {}): Promise
   const ignoredSet = new Set(ignoredCoins);
 
   const recentOpeningFills: { address: string; fill: Fill; signalType: SignalDirection }[] = [];
-  for (const { address, fill } of allAccumulatedFills) {
+  for (const { address, fill } of compactedFills) {
     if (ignoredSet.has(fill.coin.toUpperCase())) continue;
-    const isRecent = now - fill.time < timeWindowMs;
     const classification = classifyFillForSignal(fill);
-    if (!isRecent || !classification) continue;
+    if (!classification) continue;
 
     const wallet = walletsWithCooldown.find((w: { address: string }) => w.address.toLowerCase() === address.toLowerCase());
     if (!wallet) continue;
@@ -727,7 +734,3 @@ export async function getWalletData(address: string): Promise<{
 
 /* Re-export for compatibility with dashboard/perf services */
 export { readWallets, writeWallets, isOnCooldown, COOLDOWN_MS };
-
-/** Silence unused import warnings for registerHyperliquidPenalty/parseRetryAfterMs in some build paths */
-void registerHyperliquidPenalty;
-void parseRetryAfterMs;

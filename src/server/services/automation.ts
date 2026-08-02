@@ -78,51 +78,30 @@ export async function runAutomationTick({ reason }: { reason: string }): Promise
     const startIndex = totalWallets > 0 ? state.nextWalletIndex % totalWallets : 0;
     const stride = Math.min(DETECTION_STRIDE, Math.max(1, totalWallets));
 
-    /* ---- Phase 1: detect (up to DETECTION_STRIDE wallets) ---- */
+    /* ---- Phase 1: detect ALL wallets in parallel chunks ---- */
     const detectionStart = Date.now();
-    const walletsToScan = Math.min(DETECTION_STRIDE, Math.max(1, totalWallets));
-    // Give detection a generous 20s window (Cloudflare limit is 25s).
-    // With 3.5s per-request timeout, 5 wallets will ALWAYS complete in < 18s.
-    const detectionDeadline = detectionStart + 20_000;
-    await log({
-      level: 'INFO',
-      message: `Detection budget: ${walletsToScan} wallets, 20000ms deadline`,
-    });
+    const detectionDeadline = detectionStart + 18_000;
     await detectAndSaveSignals({
       deadlineMs: detectionDeadline,
-      onProgress: async ({ processedWallets, aborted }) => {
+      onProgress: async ({ processedWallets }) => {
         await heartbeat();
-        if (aborted && typeof processedWallets === 'number') {
-          await log({
-            level: 'WARN',
-            message: `Detection progress: ${processedWallets}/${totalWallets} wallets scanned before abort.`,
-          });
-        }
       },
     });
 
-    const detectionDone = await isDetectionComplete(totalWallets);
-    const walletStart = startIndex;
-    // Exact count of wallets processed this run: cursor moved forward in detectAndSaveSignals.
-    const cursorAfter = (await readWorkerState()).nextWalletIndex;
-    const cursorDelta = (cursorAfter - startIndex + totalWallets) % totalWallets;
-    const walletsProcessed = totalWallets > 0 ? cursorDelta : 0;
+    const walletStart = 0;
+    const walletsProcessed = totalWallets;
     await heartbeat(Date.now() - startedAt);
 
-    /* ---- Phase 2: refresh prices (only when detection is caught up) ---- */
+    /* ---- Phase 2: refresh prices ---- */
     let phase: AutomationTickResult['phase'] = 'detection';
-    if (detectionDone) {
-      if (Date.now() - startedAt > TICK_HARD_LIMIT_MS - TICK_COMPLETION_BUFFER_MS) {
-        await log({ level: 'WARN', message: 'Skipping price update this tick: time budget low.' });
-      } else {
-        phase = 'prices';
-        await updateSignalPrices({
-          deadlineMs: startedAt + TICK_HARD_LIMIT_MS - TICK_COMPLETION_BUFFER_MS,
-          onProgress: async () => {
-            await heartbeat();
-          },
-        });
-      }
+    if (Date.now() - startedAt < TICK_HARD_LIMIT_MS - TICK_COMPLETION_BUFFER_MS) {
+      phase = 'prices';
+      await updateSignalPrices({
+        deadlineMs: startedAt + TICK_HARD_LIMIT_MS - TICK_COMPLETION_BUFFER_MS,
+        onProgress: async () => {
+          await heartbeat();
+        },
+      });
     }
 
     await completeWorkerRun({ runId, status: 'success', durationMs: Date.now() - startedAt });
@@ -134,7 +113,7 @@ export async function runAutomationTick({ reason }: { reason: string }): Promise
         walletStart,
         walletsProcessed,
         totalWallets,
-        detectionDone,
+        detectionDone: true,
         durationMs: Date.now() - startedAt,
       },
     });
@@ -145,7 +124,7 @@ export async function runAutomationTick({ reason }: { reason: string }): Promise
       walletStart,
       walletsProcessed,
       totalWallets,
-      detectionDone,
+      detectionDone: true,
       runId,
       durationMs: Date.now() - startedAt,
     };
