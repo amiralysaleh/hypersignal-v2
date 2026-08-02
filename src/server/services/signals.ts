@@ -323,19 +323,30 @@ export async function detectAndSaveSignals(options: DetectOptions = {}): Promise
     }
   }
 
-  // Merge with previous cache, removing duplicates by fill tid/hash/time
+  // Deduplicate using robust key (hash or address-coin-time)
   const previousCached = await reader<CachedFillEntry[]>(FILLS_STORE_KEY, []);
   const fillMap = new Map<string, CachedFillEntry>();
 
   for (const entry of [...previousCached, ...currentFlatFills]) {
     if (entry.fill.time >= cacheRetentionLimit) {
-      const key = `${entry.address}-${entry.fill.coin}-${entry.fill.time}-${entry.fill.sz}`;
+      const fillId = entry.fill.hash || `${entry.fill.tid}` || `${entry.fill.time}`;
+      const key = `${entry.address.toLowerCase()}-${entry.fill.coin.toUpperCase()}-${fillId}`;
       fillMap.set(key, entry);
     }
   }
 
-  const allAccumulatedFills = [...fillMap.values()].slice(0, 300);
+  const allAccumulatedFills = [...fillMap.values()]
+    .sort((a, b) => b.fill.time - a.fill.time)
+    .slice(0, 400);
+
   await writer(FILLS_STORE_KEY, allAccumulatedFills);
+
+  // Parse monitored & ignored pairs
+  const monitoredCoins = (settings.monitoredPairs || '')
+    .split(',')
+    .map((s) => s.trim().toUpperCase())
+    .filter(Boolean);
+  const monitoredSet = monitoredCoins.length > 0 ? new Set(monitoredCoins) : null;
 
   const ignoredCoins = (settings.ignoredPairs || '')
     .split(',')
@@ -345,7 +356,10 @@ export async function detectAndSaveSignals(options: DetectOptions = {}): Promise
 
   const recentOpeningFills: { address: string; fill: Fill; signalType: SignalDirection }[] = [];
   for (const { address, fill } of allAccumulatedFills) {
-    if (ignoredSet.has(fill.coin.toUpperCase())) continue;
+    const coinUpper = fill.coin.toUpperCase();
+    if (ignoredSet.has(coinUpper)) continue;
+    if (monitoredSet && !monitoredSet.has(coinUpper)) continue;
+
     // Check if fill falls within the active signal detection time window
     const isWithinWindow = now - fill.time <= timeWindowMs;
     if (!isWithinWindow) continue;
@@ -355,9 +369,8 @@ export async function detectAndSaveSignals(options: DetectOptions = {}): Promise
 
     const wallet = walletsWithCooldown.find((w: { address: string }) => w.address.toLowerCase() === address.toLowerCase());
     if (!wallet) continue;
-    if (isOnCooldown(wallet, fill.coin, now)) continue;
 
-    recentOpeningFills.push({ address, fill, signalType: classification });
+    recentOpeningFills.push({ address: address.toLowerCase(), fill, signalType: classification });
   }
   await report('aggregate', fillsByWallet.length);
 
@@ -420,16 +433,25 @@ export async function detectAndSaveSignals(options: DetectOptions = {}): Promise
     const totalVolume = best.volume;
     if (totalVolume < minVolume) continue;
 
+    const participatingWallets = [...new Set(cluster.map(({ address }) => address.toLowerCase()))];
+
+    // Check if any participating wallet is currently under cooldown for this coin
+    const hasCooldownWallet = participatingWallets.some((addr) => {
+      const wObj = walletsWithCooldown.find((w: { address: string }) => w.address.toLowerCase() === addr);
+      return wObj ? isOnCooldown(wObj, coin, now) : false;
+    });
+    if (hasCooldownWallet) continue;
+
+    const clusterStartTime = Math.min(...cluster.map(({ fill }) => fill.time));
     const signalTimestamp = Math.max(...cluster.map(({ fill }) => fill.time));
 
-    // Check duplicate signal in the same time window
+    // Check duplicate signal in the same time window (within timeWindowMs)
     const isDuplicate = existingSignals.some(
       (s) => s.pair.toUpperCase() === coin && s.type === type && Math.abs(new Date(s.timestamp).getTime() - signalTimestamp) < timeWindowMs
     );
     if (isDuplicate) continue;
 
-    const signalId = `${coin}-${type}-${signalTimestamp}`;
-    const participatingWallets = [...new Set(cluster.map(({ address }) => address.toLowerCase()))];
+    const signalId = `${coin}-${type}-${clusterStartTime}`;
 
     const totalSize = cluster.reduce((acc, { fill }) => acc + Math.abs(Number.parseFloat(fill.sz)), 0);
     const totalCost = cluster.reduce((acc, { fill }) => acc + Number.parseFloat(fill.px) * Math.abs(Number.parseFloat(fill.sz)), 0);
