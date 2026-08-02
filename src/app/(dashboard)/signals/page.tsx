@@ -36,7 +36,7 @@ export default function SignalsPage() {
 
   useEffect(() => {
     fetchSignals();
-    const t = setInterval(() => fetchSignals({ silent: true }), 20000);
+    const t = setInterval(() => fetchSignals({ silent: true }), 10000);
     return () => clearInterval(t);
   }, [fetchSignals]);
 
