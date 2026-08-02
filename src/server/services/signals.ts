@@ -148,11 +148,15 @@ function classifyFillForSignal(fill: Fill): SignalDirection | null {
     if (dir.includes('short')) return 'SHORT';
   }
 
-  const startPosition = Number.parseFloat(fill.startPosition);
-  if (!Number.isFinite(startPosition)) return null;
-
+  // Fallback using fill side & startPosition
+  const startPosition = Number.parseFloat(fill.startPosition ?? '0');
   if (fill.side === 'B' && startPosition >= 0) return 'LONG';
   if (fill.side === 'A' && startPosition <= 0) return 'SHORT';
+
+  // Secondary fallback: Buy side is generally Long entry for non-closing fills
+  if (fill.side === 'B') return 'LONG';
+  if (fill.side === 'A') return 'SHORT';
+
   return null;
 }
 
@@ -290,19 +294,19 @@ export async function detectAndSaveSignals(options: DetectOptions = {}): Promise
   const FILLS_STORE_KEY = 'recent-fills.json';
   interface CachedFillEntry { address: string; fill: Fill }
 
-  // Compact fills: keep only essential fields and only within the active time window
-  const windowLimitTime = now - timeWindowMs;
+  // Retain fills for up to 2 hours in cache so multi-tick detection works seamlessly
+  const cacheRetentionLimit = now - 2 * 60 * 60 * 1000;
   const currentFlatFills: CachedFillEntry[] = [];
 
   for (const { address, fills } of fillsByWallet) {
     for (const fill of fills) {
-      if (fill.time >= windowLimitTime) {
+      if (fill.time >= cacheRetentionLimit) {
         currentFlatFills.push({
-          address,
+          address: address.toLowerCase(),
           fill: {
             time: fill.time,
             hash: fill.hash ?? '',
-            coin: fill.coin,
+            coin: fill.coin.toUpperCase(),
             side: fill.side,
             dir: fill.dir ?? '',
             px: fill.px,
@@ -319,9 +323,19 @@ export async function detectAndSaveSignals(options: DetectOptions = {}): Promise
     }
   }
 
-  // Keep max 200 fills in store to prevent D1 SQLITE_TOOBIG errors
-  const compactedFills = currentFlatFills.slice(0, 200);
-  await writer(FILLS_STORE_KEY, compactedFills);
+  // Merge with previous cache, removing duplicates by fill tid/hash/time
+  const previousCached = await reader<CachedFillEntry[]>(FILLS_STORE_KEY, []);
+  const fillMap = new Map<string, CachedFillEntry>();
+
+  for (const entry of [...previousCached, ...currentFlatFills]) {
+    if (entry.fill.time >= cacheRetentionLimit) {
+      const key = `${entry.address}-${entry.fill.coin}-${entry.fill.time}-${entry.fill.sz}`;
+      fillMap.set(key, entry);
+    }
+  }
+
+  const allAccumulatedFills = [...fillMap.values()].slice(0, 300);
+  await writer(FILLS_STORE_KEY, allAccumulatedFills);
 
   const ignoredCoins = (settings.ignoredPairs || '')
     .split(',')
@@ -330,8 +344,12 @@ export async function detectAndSaveSignals(options: DetectOptions = {}): Promise
   const ignoredSet = new Set(ignoredCoins);
 
   const recentOpeningFills: { address: string; fill: Fill; signalType: SignalDirection }[] = [];
-  for (const { address, fill } of compactedFills) {
+  for (const { address, fill } of allAccumulatedFills) {
     if (ignoredSet.has(fill.coin.toUpperCase())) continue;
+    // Check if fill falls within the active signal detection time window
+    const isWithinWindow = now - fill.time <= timeWindowMs;
+    if (!isWithinWindow) continue;
+
     const classification = classifyFillForSignal(fill);
     if (!classification) continue;
 
@@ -352,7 +370,7 @@ export async function detectAndSaveSignals(options: DetectOptions = {}): Promise
   /* Group by coin-direction, then find the max window cluster per group */
   const groups = new Map<string, { type: SignalDirection; fills: { address: string; fill: Fill }[] }>();
   for (const entry of recentOpeningFills) {
-    const key = `${entry.fill.coin}-${entry.signalType}`;
+    const key = `${entry.fill.coin.toUpperCase()}-${entry.signalType}`;
     const existing = groups.get(key);
     if (existing) existing.fills.push({ address: entry.address, fill: entry.fill });
     else groups.set(key, { type: entry.signalType, fills: [{ address: entry.address, fill: entry.fill }] });
@@ -363,38 +381,56 @@ export async function detectAndSaveSignals(options: DetectOptions = {}): Promise
 
   for (const { type, fills } of groups.values()) {
     const sorted = fills.sort((a, b) => a.fill.time - b.fill.time);
-    const coin = sorted[0].fill.coin;
+    const coin = sorted[0].fill.coin.toUpperCase();
 
-    let best: { start: number; end: number; wallets: number } | null = null;
+    let best: { start: number; end: number; wallets: number; volume: number } | null = null;
     const walletCounts = new Map<string, number>();
     let startIdx = 0;
+
     for (let endIdx = 0; endIdx < sorted.length; endIdx++) {
-      const w = sorted[endIdx].address;
+      const w = sorted[endIdx].address.toLowerCase();
       walletCounts.set(w, (walletCounts.get(w) ?? 0) + 1);
-      while (startIdx <= endIdx && sorted[endIdx].fill.time - sorted[startIdx].fill.time >= timeWindowMs) {
-        const sw = sorted[startIdx].address;
+
+      // Slide window: remove fills that are strictly older than timeWindowMs from current end fill
+      while (startIdx < endIdx && sorted[endIdx].fill.time - sorted[startIdx].fill.time > timeWindowMs) {
+        const sw = sorted[startIdx].address.toLowerCase();
         const remaining = (walletCounts.get(sw) ?? 0) - 1;
         if (remaining > 0) walletCounts.set(sw, remaining);
         else walletCounts.delete(sw);
         startIdx += 1;
       }
+
       const uniqueWallets = walletCounts.size;
-      if (uniqueWallets >= minWalletCount && (!best || uniqueWallets > best.wallets)) {
-        best = { start: startIdx, end: endIdx, wallets: uniqueWallets };
+      if (uniqueWallets >= minWalletCount) {
+        const clusterSlice = sorted.slice(startIdx, endIdx + 1);
+        const clusterVol = clusterSlice.reduce(
+          (acc, { fill }) => acc + Number.parseFloat(fill.px) * Math.abs(Number.parseFloat(fill.sz)),
+          0
+        );
+
+        if (!best || uniqueWallets > best.wallets || (uniqueWallets === best.wallets && clusterVol > best.volume)) {
+          best = { start: startIdx, end: endIdx, wallets: uniqueWallets, volume: clusterVol };
+        }
       }
     }
 
     if (!best) continue;
 
     const cluster = sorted.slice(best.start, best.end + 1);
-    const totalVolume = cluster.reduce((acc, { fill }) => acc + Number.parseFloat(fill.px) * Math.abs(Number.parseFloat(fill.sz)), 0);
+    const totalVolume = best.volume;
     if (totalVolume < minVolume) continue;
 
     const signalTimestamp = Math.max(...cluster.map(({ fill }) => fill.time));
-    const signalId = `${coin}-${type}-${signalTimestamp}`;
-    if (existingSignals.some((s) => s.id === signalId)) continue;
 
-    const participatingWallets = [...new Set(cluster.map(({ address }) => address))];
+    // Check duplicate signal in the same time window
+    const isDuplicate = existingSignals.some(
+      (s) => s.pair.toUpperCase() === coin && s.type === type && Math.abs(new Date(s.timestamp).getTime() - signalTimestamp) < timeWindowMs
+    );
+    if (isDuplicate) continue;
+
+    const signalId = `${coin}-${type}-${signalTimestamp}`;
+    const participatingWallets = [...new Set(cluster.map(({ address }) => address.toLowerCase()))];
+
     const totalSize = cluster.reduce((acc, { fill }) => acc + Math.abs(Number.parseFloat(fill.sz)), 0);
     const totalCost = cluster.reduce((acc, { fill }) => acc + Number.parseFloat(fill.px) * Math.abs(Number.parseFloat(fill.sz)), 0);
     const avgEntryPrice = totalSize > 0 ? totalCost / totalSize : 0;
