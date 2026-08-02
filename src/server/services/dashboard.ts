@@ -108,7 +108,8 @@ export async function getDashboardData(): Promise<DashboardData> {
       });
     } else {
       const date = new Date(signal.timestamp);
-      const monthKey = `${date.getFullYear()}-${date.getMonth()}`;
+      // Format monthKey reliably: YYYY-MM
+      const monthKey = `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, '0')}`;
       monthlyStats[monthKey] = monthlyStats[monthKey] ?? { tp: 0, sl: 0 };
       if (signal.status === 'TP') {
         tpCount += 1;
@@ -127,12 +128,12 @@ export async function getDashboardData(): Promise<DashboardData> {
   const performanceChartData: { month: string; winrate: number }[] = [];
   const today = new Date();
   for (let i = 5; i >= 0; i -= 1) {
-    const d = new Date(today.getFullYear(), today.getMonth() - i, 1);
-    const monthKey = `${d.getFullYear()}-${d.getMonth()}`;
+    const d = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth() - i, 1));
+    const monthKey = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`;
     const stats = monthlyStats[monthKey] ?? { tp: 0, sl: 0 };
     const totalTrades = stats.tp + stats.sl;
     const monthlyWinrate = totalTrades > 0 ? (stats.tp / totalTrades) * 100 : 0;
-    performanceChartData.push({ month: MONTH_NAMES[d.getMonth()], winrate: Number(monthlyWinrate.toFixed(1)) });
+    performanceChartData.push({ month: MONTH_NAMES[d.getUTCMonth()], winrate: Number(monthlyWinrate.toFixed(1)) });
   }
 
   const toInsight = (signal: Signal): SignalInsight => ({

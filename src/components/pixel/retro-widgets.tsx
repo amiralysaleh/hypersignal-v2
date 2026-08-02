@@ -117,11 +117,11 @@ export function PixelLoadingDots({ className }: { className?: string }) {
   );
 }
 
-import { PixelRunner } from './pixel-characters';
+import { PixelBlockLoader } from './pixel-block-loader';
 
-/** Full-panel "LOADING..." screen driven by cute Pixel Runner. */
-export function PixelLoader({ label = 'LOADING...', className }: { label?: string; className?: string }) {
-  return <PixelRunner label={label} className={className} />;
+/** Full-panel "LOADING..." screen driven by Block-Filling Pixel Loader. */
+export function PixelLoader({ label = 'LOADING SYSTEM...', className }: { label?: string; className?: string }) {
+  return <PixelBlockLoader label={label} className={className} />;
 }
 
 /** Progress bar with pixel blocks. */

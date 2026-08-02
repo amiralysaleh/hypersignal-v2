@@ -88,7 +88,8 @@ export default function DashboardPage() {
 
               return chartData.map((d, i) => {
                 const isBest = i === bestIndex && d.winrate > 0;
-                const heightPct = Math.max(12, (d.winrate / maxWinrate) * 100);
+                // Scale height: 0% gets a subtle base, higher winrates scale dynamically up to 100%
+                const heightPct = d.winrate > 0 ? Math.max(15, (d.winrate / 100) * 100) : 6;
 
                 return (
                   <div key={d.month} className="group relative flex flex-1 flex-col items-center justify-end">
@@ -99,25 +100,27 @@ export default function DashboardPage() {
                       </span>
                     )}
 
-                    <span className="mb-1.5 font-mono text-[10px] font-bold text-px-cyan text-glow">
-                      {d.winrate.toFixed(0)}%
+                    <span className={cn('mb-1.5 font-mono text-[10px] font-bold', d.winrate > 0 ? 'text-px-cyan text-glow' : 'text-px-gray')}>
+                      {d.winrate > 0 ? `${d.winrate.toFixed(0)}%` : '0%'}
                     </span>
 
                     {/* Animated Pixel Bar */}
                     <div
                       className={cn(
                         'relative w-full border border-px-cyan/30 bg-base-950 p-0.5 transition-all duration-500',
-                        isBest && 'border-px-cyan shadow-[0_0_12px_rgba(34,211,238,0.3)]'
+                        isBest && 'border-px-cyan shadow-[0_0_14px_rgba(34,211,238,0.35)]'
                       )}
                       style={{ height: `${heightPct}%` }}
                     >
                       <div
                         className={cn(
-                          'h-full w-full transition-all duration-300',
-                          isBest
+                          'h-full w-full transition-all duration-500',
+                          d.winrate === 0
+                            ? 'bg-base-800/40'
+                            : isBest
                             ? 'bg-gradient-to-t from-px-cyan-dim to-px-cyan shadow-[0_0_8px_#22d3ee]'
                             : d.winrate >= 50
-                            ? 'bg-gradient-to-t from-emerald-900 to-px-green'
+                            ? 'bg-gradient-to-t from-emerald-950 to-px-green'
                             : 'bg-gradient-to-t from-amber-950 to-px-yellow'
                         )}
                       />
