@@ -117,21 +117,11 @@ export function PixelLoadingDots({ className }: { className?: string }) {
   );
 }
 
-/** Full-panel "LOADING..." boot screen with spinner. */
-export function PixelLoader({ label = 'LOADING', className }: { label?: string; className?: string }) {
-  return (
-    <div className={cn('crt-panel flex flex-col items-center justify-center gap-5 p-10', className)}>
-      <div className="relative h-10 w-10">
-        <span className="absolute inset-0 animate-pulse-ring rounded-none border-2 border-px-cyan" />
-        <span className="absolute inset-0 animate-spin-slow border-2 border-px-cyan border-t-transparent" />
-        <span className="absolute inset-[10px] animate-pulse bg-px-cyan/30" />
-      </div>
-      <p className="font-pixel text-[10px] uppercase text-px-cyan text-glow">
-        {label}
-        <BlinkCursor />
-      </p>
-    </div>
-  );
+import { PixelRunner } from './pixel-characters';
+
+/** Full-panel "LOADING..." screen driven by cute Pixel Runner. */
+export function PixelLoader({ label = 'LOADING...', className }: { label?: string; className?: string }) {
+  return <PixelRunner label={label} className={className} />;
 }
 
 /** Progress bar with pixel blocks. */

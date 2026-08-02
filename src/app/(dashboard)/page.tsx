@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import type { DashboardData } from '@/lib/types';
 import { api, cn, formatTimeAgo, formatUsd } from '@/lib/utils';
 import { CoinSprite } from '@/components/pixel/coin-sprite';
+import { PixelBatman } from '@/components/pixel/pixel-characters';
 import {
   BlinkCursor,
   PixelCard,
@@ -76,20 +77,71 @@ export default function DashboardPage() {
       </div>
 
       <div className="grid gap-5 lg:grid-cols-2">
-        {/* Winrate chart (pixel bar) */}
+        {/* Winrate Gotham Skyline Chart */}
         <PixelCard>
-          <PixelTitle icon="▚">MONTHLY WIN RATE</PixelTitle>
-          <div className="mt-4 flex h-40 items-end gap-2">
-            {chartData.map((d, i) => (
-              <div key={d.month} className="flex flex-1 flex-col items-center gap-1">
-                <span className="font-mono text-[10px] text-px-cyan">{d.winrate.toFixed(0)}%</span>
-                <div
-                  className={cn('w-full border border-px-blue/30 transition-all duration-500', d.winrate >= 50 ? 'bg-px-green' : 'bg-px-yellow')}
-                  style={{ height: `${Math.max(4, (d.winrate / maxWinrate) * 100)}%`, animationDelay: `${i * 80}ms` }}
-                />
-                <span className="font-pixel text-[7px] text-px-gray">{d.month}</span>
-              </div>
-            ))}
+          <PixelTitle icon="▚">MONTHLY WIN RATE (GOTHAM CITY)</PixelTitle>
+          <div className="relative mt-8 flex h-48 items-end gap-2 border-b-2 border-px-cyan/40 px-2 pb-1">
+            {(() => {
+              const bestIndex = chartData.reduce(
+                (maxI, item, i, arr) => (item.winrate > (arr[maxI]?.winrate ?? 0) ? i : maxI),
+                0
+              );
+
+              return chartData.map((d, i) => {
+                const isBest = i === bestIndex && d.winrate > 0;
+                const heightPct = Math.max(15, (d.winrate / maxWinrate) * 100);
+
+                return (
+                  <div key={d.month} className="group relative flex flex-1 flex-col items-center justify-end">
+                    {/* Batman Standing on top of the Best Month Tower */}
+                    {isBest && (
+                      <div className="absolute -top-7 z-10 animate-bounce">
+                        <PixelBatman />
+                      </div>
+                    )}
+
+                    <span className="mb-1 font-mono text-[9px] font-bold text-px-cyan text-glow">
+                      {d.winrate.toFixed(0)}%
+                    </span>
+
+                    {/* Pixel Building Structure */}
+                    <div
+                      className={cn(
+                        'relative w-full border-2 transition-all duration-300',
+                        isBest
+                          ? 'border-px-cyan bg-base-800 shadow-[0_0_15px_rgba(34,211,238,0.4)]'
+                          : 'border-px-blue/40 bg-base-900 hover:border-px-cyan/60'
+                      )}
+                      style={{ height: `${heightPct}%` }}
+                    >
+                      {/* Building Roof Spire */}
+                      <div className="absolute -top-1.5 left-1/2 h-1.5 w-1.5 -translate-x-1/2 bg-px-cyan" />
+
+                      {/* Pixel Windows Layer */}
+                      <div className="grid h-full w-full grid-cols-2 gap-1 p-1">
+                        {Array.from({ length: 6 }).map((_, wI) => (
+                          <div
+                            key={wI}
+                            className={cn(
+                              'h-1.5 w-full rounded-none transition-opacity',
+                              (i + wI) % 2 === 0
+                                ? isBest
+                                  ? 'bg-px-cyan shadow-[0_0_4px_#22d3ee]'
+                                  : 'bg-px-yellow/80 shadow-[0_0_4px_#fbbf24]'
+                                : 'bg-base-950/80'
+                            )}
+                          />
+                        ))}
+                      </div>
+                    </div>
+
+                    <span className="mt-2 font-pixel text-[7px] uppercase text-px-gray group-hover:text-px-cyan">
+                      {d.month}
+                    </span>
+                  </div>
+                );
+              });
+            })()}
           </div>
           {chartData.length === 0 && <p className="mt-6 text-center text-[12px] text-px-gray">No closed signals yet</p>}
         </PixelCard>
