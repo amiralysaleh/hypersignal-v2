@@ -40,6 +40,9 @@ export async function runAutomationTick({ reason }: { reason: string }): Promise
   const startedAt = Date.now();
   const runId = `${startedAt}-${Math.random().toString(16).slice(2)}`;
 
+  // Automatically mark any old orphaned runs (older than 2 minutes) as timed out to unlock cron
+  await markStaleWorkerRuns({ now: startedAt, staleAfterMs: 2 * 60 * 1000 });
+
   const activeRun = await findActiveWorkerRun({ now: startedAt });
   if (activeRun) {
     await log({

@@ -4,7 +4,8 @@ import { isDemoMode, readMemoryJson, writeMemoryJson } from '../storage/memorySt
 
 const WORKER_RUNS_FILE_PATH = 'worker-runs.json';
 const MAX_WORKER_RUN_RECORDS = 60;
-const DEFAULT_ACTIVE_RUN_GRACE_MS = 30 * 60 * 1000;
+// Cloudflare workers die within 30s. A run is stale after 60 seconds max.
+const DEFAULT_ACTIVE_RUN_GRACE_MS = 60 * 1000;
 
 const reader = <T,>(path: string, fallback: T) =>
   isDemoMode() ? readMemoryJson(path, fallback) : readJsonFile(path, fallback);
