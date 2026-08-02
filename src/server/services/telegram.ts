@@ -84,5 +84,63 @@ export async function sendTelegramMessage(signal: Signal, settings: Settings): P
   return sentAny;
 }
 
-// Simple markdown-ish message (used by telegram.ts itself; kept for potential future use)
-export { escapeMarkdown };
+export function buildOutcomeMessage(signal: Signal, settings: Settings): string {
+  const isTP = signal.status === 'TP';
+  const icon = isTP ? '🎯 *TAKE PROFIT HIT*' : '🛑 *STOP LOSS HIT*';
+  const pnlSign = Number(signal.pnl) >= 0 ? '+' : '';
+  const lines = [
+    `${icon}`,
+    ``,
+    `*${signal.pair}*  ${signal.type === 'LONG' ? '⬆️ LONG' : '⬇️ SHORT'}`,
+    ``,
+    `▸ Exit Price: $${signal.currentPrice}`,
+    `▸ Entry Price: $${signal.entryPrice}`,
+    `▸ Realized PnL: ${pnlSign}$${signal.pnl} (${pnlSign}${signal.roi}%)`,
+    `▸ Contributing Wallets: ${signal.contributingWallets}`,
+    ``,
+    `[View Dashboard](https://hypersignal-v2.amirali-saleh24.workers.dev/signals)`,
+  ];
+  return lines.join('\n');
+}
+
+export async function sendTelegramOutcomeMessage(signal: Signal, settings: Settings): Promise<boolean> {
+  const { telegramBotToken, telegramChannelIds } = settings;
+  if (!telegramBotToken || !telegramChannelIds) return false;
+
+  const channels = telegramChannelIds
+    .split(',')
+    .map((id) => id.trim())
+    .filter(Boolean);
+  if (channels.length === 0) return false;
+
+  const text = buildOutcomeMessage(signal, settings);
+  let sentAny = false;
+
+  for (const channelId of channels) {
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), TELEGRAM_REQUEST_TIMEOUT_MS);
+      const response = await fetch(`https://api.telegram.org/bot${telegramBotToken}/sendMessage`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          chat_id: channelId,
+          text,
+          parse_mode: 'Markdown',
+          disable_web_page_preview: true,
+        }),
+        signal: controller.signal,
+      });
+      clearTimeout(timeoutId);
+
+      const result = (await response.json().catch(() => null)) as { ok?: boolean } | null;
+      if (response.ok && result?.ok) {
+        sentAny = true;
+      }
+    } catch {
+      /* ignore telegram send failure */
+    }
+  }
+
+  return sentAny;
+}

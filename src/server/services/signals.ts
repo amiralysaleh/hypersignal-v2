@@ -6,7 +6,7 @@ import { getAllMids, getClearinghouseState, getUserFills, type ClearedPosition, 
 import { getSettings } from './settings';
 import { getWallets, isOnCooldown, readWallets, updateWalletCooldowns, writeWallets } from './wallets';
 import { advanceWorkerWalletCursor, readWorkerState, writeWorkerState } from './workerState';
-import { sendTelegramMessage } from './telegram';
+import { sendTelegramMessage, sendTelegramOutcomeMessage } from './telegram';
 
 const SIGNALS_FILE_PATH = 'signals.json';
 const MAX_STORED_SIGNALS = 200;
@@ -547,6 +547,7 @@ export async function updateSignalPrices(options: UpdatePricesOptions = {}): Pro
     onProgress?.({ ...progress, durationMs: Date.now() - startedAt });
 
   const signals = await readSignals();
+  const settings = await getSettings();
   const openSignals = signals.filter((s) => s.status === 'OPEN');
   if (openSignals.length === 0) {
     await report({ stage: 'complete', skipped: true, total: 0 });
@@ -561,6 +562,8 @@ export async function updateSignalPrices(options: UpdatePricesOptions = {}): Pro
     await report({ stage: 'complete', skipped: true, total: uniqueCoins.length });
     return signals;
   }
+
+  const newlyClosedSignals: Signal[] = [];
 
   const updated = signals.map((signal) => {
     if (signal.status !== 'OPEN') return signal;
@@ -585,20 +588,34 @@ export async function updateSignalPrices(options: UpdatePricesOptions = {}): Pro
     const pnl = (price - entry) * size * (signal.type === 'LONG' ? 1 : -1);
     const roi = margin > 0 ? (pnl / margin) * 100 : 0;
 
-    return {
+    const updatedSignal: Signal = {
       ...signal,
       status,
       currentPrice: price.toFixed(4),
       pnl: pnl.toFixed(2),
       roi: roi.toFixed(2),
     };
+
+    if (status !== 'OPEN' && signal.status === 'OPEN') {
+      newlyClosedSignals.push(updatedSignal);
+    }
+
+    return updatedSignal;
   });
 
-  const statusChanged = updated.some((s, i) => s.status !== signals[i].status);
+  const statusChanged = newlyClosedSignals.length > 0;
   await writeSignals(updated);
 
   if (statusChanged) {
     await updateWalletStats(updated);
+    for (const closedSig of newlyClosedSignals) {
+      await sendTelegramOutcomeMessage(closedSig, settings);
+      await log({
+        level: 'INFO',
+        message: `SIGNAL CLOSED: ${closedSig.pair} ${closedSig.type} -> ${closedSig.status}`,
+        context: { pnl: closedSig.pnl, roi: closedSig.roi, exitPx: closedSig.currentPrice },
+      });
+    }
   }
 
   await report({ stage: 'complete', skipped: false, total: uniqueCoins.length });
