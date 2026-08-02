@@ -4,7 +4,6 @@ import { useEffect, useState } from 'react';
 import type { DashboardData } from '@/lib/types';
 import { api, cn, formatTimeAgo, formatUsd } from '@/lib/utils';
 import { CoinSprite } from '@/components/pixel/coin-sprite';
-import { PixelBatman, WaterTank, Antenna } from '@/components/pixel/pixel-characters';
 import {
   BlinkCursor,
   PixelCard,
@@ -77,91 +76,54 @@ export default function DashboardPage() {
       </div>
 
       <div className="grid gap-5 lg:grid-cols-2">
-        {/* Winrate Gotham City Skyline Chart */}
-        <PixelCard className="overflow-visible">
-          <PixelTitle icon="▚">MONTHLY WIN RATE (GOTHAM CITY)</PixelTitle>
-          <div className="relative mt-12 flex h-52 items-end gap-3 border-b-4 border-slate-700 bg-slate-950/60 px-3 pb-0.5 pt-10">
+        {/* Winrate Animated Pixel Chart */}
+        <PixelCard>
+          <PixelTitle icon="▚">MONTHLY WIN RATE (%)</PixelTitle>
+          <div className="relative mt-6 flex h-48 items-end gap-3 border-b-2 border-px-cyan/40 px-3 pb-2 pt-8">
             {(() => {
               const bestIndex = chartData.reduce(
                 (maxI, item, i, arr) => (item.winrate > (arr[maxI]?.winrate ?? 0) ? i : maxI),
                 0
               );
 
-              // 6 Distinct Gotham Building Styles matching user photo
-              const BUILDING_STYLES = [
-                { bg: 'bg-amber-950/90', border: 'border-amber-800', brick: 'bg-amber-900', props: 'watertank' },
-                { bg: 'bg-stone-900/90', border: 'border-stone-700', brick: 'bg-stone-800', props: 'antenna' },
-                { bg: 'bg-red-950/90', border: 'border-red-900', brick: 'bg-red-900', props: 'none' },
-                { bg: 'bg-slate-900/90', border: 'border-slate-700', brick: 'bg-slate-800', props: 'antenna' },
-                { bg: 'bg-zinc-900/90', border: 'border-zinc-700', brick: 'bg-zinc-800', props: 'watertank' },
-                { bg: 'bg-orange-950/90', border: 'border-orange-900', brick: 'bg-amber-900', props: 'antenna' },
-              ];
-
               return chartData.map((d, i) => {
                 const isBest = i === bestIndex && d.winrate > 0;
-                const heightPct = Math.max(25, (d.winrate / maxWinrate) * 100);
-                const style = BUILDING_STYLES[i % BUILDING_STYLES.length];
+                const heightPct = Math.max(12, (d.winrate / maxWinrate) * 100);
 
                 return (
                   <div key={d.month} className="group relative flex flex-1 flex-col items-center justify-end">
-                    {/* Batman Standing on Building Edge of the Best Month */}
+                    {/* Top Month Badge */}
                     {isBest && (
-                      <div className="absolute -top-10 left-1 z-20">
-                        <PixelBatman />
-                      </div>
+                      <span className="chip chip--cyan absolute -top-7 animate-bounce text-[7px]">
+                        ★ TOP
+                      </span>
                     )}
 
-                    {/* Rooftop Props: Water Tank / Antenna */}
-                    {!isBest && style.props === 'watertank' && (
-                      <div className="absolute -top-7 z-10 scale-75">
-                        <WaterTank />
-                      </div>
-                    )}
-                    {!isBest && style.props === 'antenna' && (
-                      <div className="absolute -top-6 left-2 z-10 scale-75">
-                        <Antenna />
-                      </div>
-                    )}
-
-                    <span className="mb-1 font-mono text-[9px] font-bold text-amber-300 text-glow-yellow">
+                    <span className="mb-1.5 font-mono text-[10px] font-bold text-px-cyan text-glow">
                       {d.winrate.toFixed(0)}%
                     </span>
 
-                    {/* Pixel Gotham Building Container */}
+                    {/* Animated Pixel Bar */}
                     <div
                       className={cn(
-                        'relative w-full border-2 transition-all duration-300',
-                        style.bg,
-                        style.border,
-                        isBest && 'border-amber-400 shadow-[0_0_20px_rgba(251,191,36,0.35)]'
+                        'relative w-full border border-px-cyan/30 bg-base-950 p-0.5 transition-all duration-500',
+                        isBest && 'border-px-cyan shadow-[0_0_12px_rgba(34,211,238,0.3)]'
                       )}
                       style={{ height: `${heightPct}%` }}
                     >
-                      {/* Roof Cornice / Rim */}
-                      <div className="absolute -top-1 inset-x-0 h-1 border-t-2 border-slate-600 bg-amber-950" />
-
-                      {/* Brick Texture Lines */}
-                      <div className="absolute inset-0 opacity-25">
-                        <div className="h-full w-full bg-[linear-gradient(to_bottom,transparent_3px,rgba(0,0,0,0.8)_3px)] bg-[length:100%_6px]" />
-                      </div>
-
-                      {/* Illuminated Pixel Windows */}
-                      <div className="grid h-full w-full grid-cols-2 gap-1.5 p-1.5">
-                        {Array.from({ length: 8 }).map((_, wI) => (
-                          <div
-                            key={wI}
-                            className={cn(
-                              'h-2 w-full border border-amber-950/80 transition-opacity',
-                              (i * 3 + wI) % 3 !== 0
-                                ? 'bg-amber-400 shadow-[0_0_6px_#fbbf24]'
-                                : 'bg-slate-950/90'
-                            )}
-                          />
-                        ))}
-                      </div>
+                      <div
+                        className={cn(
+                          'h-full w-full transition-all duration-300',
+                          isBest
+                            ? 'bg-gradient-to-t from-px-cyan-dim to-px-cyan shadow-[0_0_8px_#22d3ee]'
+                            : d.winrate >= 50
+                            ? 'bg-gradient-to-t from-emerald-900 to-px-green'
+                            : 'bg-gradient-to-t from-amber-950 to-px-yellow'
+                        )}
+                      />
                     </div>
 
-                    <span className="mt-2 font-pixel text-[7.5px] uppercase text-slate-300 group-hover:text-amber-300">
+                    <span className="mt-2 font-pixel text-[8px] uppercase text-px-gray group-hover:text-px-cyan transition-colors">
                       {d.month}
                     </span>
                   </div>
