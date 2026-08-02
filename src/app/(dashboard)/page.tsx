@@ -79,7 +79,7 @@ export default function DashboardPage() {
         {/* Winrate Animated Pixel Chart */}
         <PixelCard>
           <PixelTitle icon="▚">MONTHLY WIN RATE (%)</PixelTitle>
-          <div className="relative mt-6 flex h-48 items-end gap-3 border-b-2 border-px-cyan/40 px-3 pb-2 pt-8">
+          <div className="relative mt-6 flex h-56 items-end gap-3 border-b-2 border-px-cyan/40 px-3 pb-2 pt-10">
             {(() => {
               const bestIndex = chartData.reduce(
                 (maxI, item, i, arr) => (item.winrate > (arr[maxI]?.winrate ?? 0) ? i : maxI),
@@ -88,29 +88,29 @@ export default function DashboardPage() {
 
               return chartData.map((d, i) => {
                 const isBest = i === bestIndex && d.winrate > 0;
-                // Scale height: 0% gets a subtle base, higher winrates scale dynamically up to 100%
-                const heightPct = d.winrate > 0 ? Math.max(15, (d.winrate / 100) * 100) : 6;
+                // Calculate exact pixel height for bar container (max 160px for 100%, min 16px for 0%)
+                const barHeightPx = d.winrate > 0 ? Math.max(28, Math.round((d.winrate / 100) * 160)) : 16;
 
                 return (
-                  <div key={d.month} className="group relative flex flex-1 flex-col items-center justify-end">
+                  <div key={d.month} className="group relative flex flex-1 flex-col items-center justify-end h-full">
                     {/* Top Month Badge */}
                     {isBest && (
-                      <span className="chip chip--cyan absolute -top-7 animate-bounce text-[7px]">
+                      <span className="chip chip--cyan absolute -top-8 animate-bounce text-[7.5px] z-10">
                         ★ TOP
                       </span>
                     )}
 
                     <span className={cn('mb-1.5 font-mono text-[10px] font-bold', d.winrate > 0 ? 'text-px-cyan text-glow' : 'text-px-gray')}>
-                      {d.winrate > 0 ? `${d.winrate.toFixed(0)}%` : '0%'}
+                      {d.winrate > 0 ? `${d.winrate.toFixed(1)}%` : '0%'}
                     </span>
 
                     {/* Animated Pixel Bar */}
                     <div
                       className={cn(
-                        'relative w-full border border-px-cyan/30 bg-base-950 p-0.5 transition-all duration-500',
-                        isBest && 'border-px-cyan shadow-[0_0_14px_rgba(34,211,238,0.35)]'
+                        'relative w-full border border-px-cyan/40 bg-base-950 p-0.5 transition-all duration-500',
+                        isBest && 'border-px-cyan shadow-[0_0_16px_rgba(34,211,238,0.4)]'
                       )}
-                      style={{ height: `${heightPct}%` }}
+                      style={{ height: `${barHeightPx}px` }}
                     >
                       <div
                         className={cn(
@@ -118,7 +118,7 @@ export default function DashboardPage() {
                           d.winrate === 0
                             ? 'bg-base-800/40'
                             : isBest
-                            ? 'bg-gradient-to-t from-px-cyan-dim to-px-cyan shadow-[0_0_8px_#22d3ee]'
+                            ? 'bg-gradient-to-t from-px-cyan-dim to-px-cyan shadow-[0_0_10px_#22d3ee]'
                             : d.winrate >= 50
                             ? 'bg-gradient-to-t from-emerald-950 to-px-green'
                             : 'bg-gradient-to-t from-amber-950 to-px-yellow'
