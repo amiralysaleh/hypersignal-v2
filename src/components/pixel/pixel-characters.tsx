@@ -19,7 +19,6 @@ export function PixelRunner({ label = 'LOADING...', className }: { label?: strin
 
   // 12x16 Pixel Art Runner Frames
   const RUNNER_FRAMES = [
-    // Frame 0: Contact
     [
       '....3333....',
       '...335533...',
@@ -35,7 +34,6 @@ export function PixelRunner({ label = 'LOADING...', className }: { label?: strin
       '.33......33.',
       '33........33',
     ],
-    // Frame 1: Passing
     [
       '....3333....',
       '...335533...',
@@ -51,7 +49,6 @@ export function PixelRunner({ label = 'LOADING...', className }: { label?: strin
       '....3333....',
       '....3333....',
     ],
-    // Frame 2: Extension
     [
       '....3333....',
       '...335533...',
@@ -67,7 +64,6 @@ export function PixelRunner({ label = 'LOADING...', className }: { label?: strin
       '33........33',
       '.............',
     ],
-    // Frame 3: High Knee
     [
       '....3333....',
       '...335533...',
@@ -97,7 +93,6 @@ export function PixelRunner({ label = 'LOADING...', className }: { label?: strin
   return (
     <div className={cn('crt-panel flex flex-col items-center justify-center gap-4 p-8', className)}>
       <div className="relative flex flex-col items-center">
-        {/* Runner Sprite */}
         <div
           className="relative select-none"
           style={{ width: 12 * cell, height: 14 * cell, imageRendering: 'pixelated' }}
@@ -122,18 +117,15 @@ export function PixelRunner({ label = 'LOADING...', className }: { label?: strin
           )}
         </div>
 
-        {/* Pixel Dust under feet */}
         <div className="mt-1 flex gap-1">
           <span className={cn('h-1 w-1 bg-px-cyan/60 transition-opacity', frame % 2 === 0 ? 'opacity-100' : 'opacity-20')} />
           <span className={cn('h-1.5 w-1.5 bg-px-cyan/40 transition-opacity', frame % 2 === 1 ? 'opacity-100' : 'opacity-10')} />
           <span className={cn('h-1 w-1 bg-px-cyan/20 transition-opacity', frame === 2 ? 'opacity-100' : 'opacity-0')} />
         </div>
 
-        {/* Pixel Track Ground */}
         <div className="mt-0.5 h-1 w-32 border-b-2 border-dashed border-px-cyan/40" />
       </div>
 
-      {/* Label */}
       <p className="font-pixel text-[10px] uppercase text-px-cyan text-glow">
         {label}
         <span className="inline-block h-3 w-2 animate-blink bg-px-cyan align-middle ml-1" />
@@ -143,7 +135,7 @@ export function PixelRunner({ label = 'LOADING...', className }: { label?: strin
 }
 
 /**
- * Animated Pixel-Art Batman Standing on Top Building with Flapping Cape.
+ * Detailed Pixel-Art Batman Standing on Building Edge (Matching User Image).
  */
 export function PixelBatman({ className }: { className?: string }) {
   const [capeFrame, setCapeFrame] = useState(0);
@@ -155,59 +147,71 @@ export function PixelBatman({ className }: { className?: string }) {
     return () => clearInterval(t);
   }, []);
 
-  // Batman Head + Body + Flapping Cape
-  const CAPE_WIND = [
+  const BATMAN_SPRITE = [
     [
-      '...3....3...', // Ears
-      '..333..333..', // Head
-      '..33333333..',
-      '...339933...', // Eyes (White/Yellow glow)
-      '...333333...',
-      '..33333333..', // Shoulders
-      '.3333333333.', // Torso + Cape
-      '.3333..3333.',
-      '3333....3333',
-      '333......333',
+      '.....3...3......', // Ears
+      '....333.333.....',
+      '....3333333.....', // Mask
+      '.....39993......', // Eyes Glow
+      '.....33333......',
+      '....3333333.....', // Neck
+      '...333555333....', // Gold Emblem Chest
+      '..33335553333...',
+      '.3333333333333..', // Shoulders / Belt
+      '.3333999993333..', // Gold Utility Belt
+      '.3333333333333..',
+      '..3333...3333...', // Legs
+      '..333.....333...',
+      '.333.......333..', // Boots
     ],
     [
-      '...3....3...',
-      '..333..333..',
-      '..33333333..',
-      '...339933...',
-      '...333333...',
-      '..33333333..',
-      '..333333333.', // Cape wind right
-      '..3333..3333',
-      '.3333....333',
-      '.333......33',
+      '.....3...3......',
+      '....333.333.....',
+      '....3333333.....',
+      '.....39993......',
+      '.....33333......',
+      '....3333333.....',
+      '...333555333....',
+      '..33335553333...',
+      '..333333333333..', // Cape flap right
+      '.33339999933333.',
+      '.33333333333333.',
+      '..3333...3333...',
+      '..333.....333...',
+      '.333.......333..',
     ],
     [
-      '...3....3...',
-      '..333..333..',
-      '..33333333..',
-      '...339933...',
-      '...333333...',
-      '..33333333..',
-      '.333333333..', // Cape wind left
-      '3333..3333..',
-      '333....3333.',
-      '33......333.',
+      '.....3...3......',
+      '....333.333.....',
+      '....3333333.....',
+      '.....39993......',
+      '.....33333......',
+      '....3333333.....',
+      '...333555333....',
+      '..33335553333...',
+      '.333333333333...', // Cape flap left
+      '3.333399999333..',
+      '3.333333333333..',
+      '..3333...3333...',
+      '..333.....333...',
+      '.333.......333..',
     ],
   ];
 
   const PALETTE: Record<string, string> = {
-    '3': '#1e293b', // Batman Suit Dark Slate
-    '9': '#fef08a', // Yellow Eyes/Chest Emblem Glow
+    '3': '#0f172a', // Dark Bat Suit / Cape
+    '5': '#fbbf24', // Gold Emblem
+    '9': '#ffffff', // Glowing Eyes
   };
 
-  const rows = CAPE_WIND[capeFrame];
-  const cell = 2.2;
+  const rows = BATMAN_SPRITE[capeFrame];
+  const cell = 2.4;
 
   return (
     <div className={cn('relative flex flex-col items-center select-none', className)}>
       <div
         className="relative"
-        style={{ width: 12 * cell, height: 10 * cell, imageRendering: 'pixelated' }}
+        style={{ width: 16 * cell, height: 14 * cell, imageRendering: 'pixelated' }}
       >
         {rows.map((row, y) =>
           row.split('').map((char, x) => {
@@ -221,13 +225,44 @@ export function PixelBatman({ className }: { className?: string }) {
                   top: y * cell,
                   width: cell + 0.2,
                   height: cell + 0.2,
-                  backgroundColor: PALETTE[char] ?? '#1e293b',
-                  boxShadow: char === '9' ? '0 0 6px #fef08a' : undefined,
+                  backgroundColor: PALETTE[char] ?? '#0f172a',
+                  boxShadow: char === '9' ? '0 0 6px #ffffff' : char === '5' ? '0 0 4px #fbbf24' : undefined,
                 }}
               />
             );
           })
         )}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Pixel-Art Gotham Building Props (Water Tank, Antenna, Fire Escape, Windows).
+ */
+export function WaterTank({ className }: { className?: string }) {
+  return (
+    <div className={cn('flex flex-col items-center select-none', className)}>
+      {/* Tank Barrel */}
+      <div className="h-4 w-6 border border-amber-950 bg-amber-900 shadow-inner">
+        <div className="h-1 w-full border-b border-amber-950/60 bg-amber-800" />
+      </div>
+      {/* Wooden Legs */}
+      <div className="flex h-3 w-5 justify-between px-0.5">
+        <div className="h-full w-0.5 bg-amber-950" />
+        <div className="h-full w-0.5 bg-amber-950" />
+      </div>
+    </div>
+  );
+}
+
+export function Antenna({ className }: { className?: string }) {
+  return (
+    <div className={cn('flex flex-col items-center select-none', className)}>
+      <div className="h-6 w-0.5 bg-slate-400" />
+      <div className="relative -top-4 flex w-3 justify-between">
+        <div className="h-0.5 w-1.5 bg-slate-300" />
+        <div className="h-0.5 w-1.5 bg-slate-300" />
       </div>
     </div>
   );
