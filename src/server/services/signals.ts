@@ -433,17 +433,19 @@ export async function detectAndSaveSignals(options: DetectOptions = {}): Promise
     const totalVolume = best.volume;
     if (totalVolume < minVolume) continue;
 
-    const participatingWallets = [...new Set(cluster.map(({ address }) => address.toLowerCase()))];
-
-    // Check if any participating wallet is currently under cooldown for this coin
-    const hasCooldownWallet = participatingWallets.some((addr) => {
-      const wObj = walletsWithCooldown.find((w: { address: string }) => w.address.toLowerCase() === addr);
-      return wObj ? isOnCooldown(wObj, coin, now) : false;
+    // Filter out wallets that are on cooldown for this coin, keeping valid ones
+    const validFillsInCluster = cluster.filter(({ address }) => {
+      const wObj = walletsWithCooldown.find((w: { address: string }) => w.address.toLowerCase() === address.toLowerCase());
+      return wObj ? !isOnCooldown(wObj, coin, now) : true;
     });
-    if (hasCooldownWallet) continue;
 
-    const clusterStartTime = Math.min(...cluster.map(({ fill }) => fill.time));
-    const signalTimestamp = Math.max(...cluster.map(({ fill }) => fill.time));
+    const participatingWallets = [...new Set(validFillsInCluster.map(({ address }) => address.toLowerCase()))];
+
+    // If remaining non-cooldown wallets are fewer than minWalletCount, skip
+    if (participatingWallets.length < minWalletCount) continue;
+
+    const clusterStartTime = Math.min(...validFillsInCluster.map(({ fill }) => fill.time));
+    const signalTimestamp = Math.max(...validFillsInCluster.map(({ fill }) => fill.time));
 
     // Check duplicate signal in the same time window (within timeWindowMs)
     const isDuplicate = existingSignals.some(
@@ -453,8 +455,8 @@ export async function detectAndSaveSignals(options: DetectOptions = {}): Promise
 
     const signalId = `${coin}-${type}-${clusterStartTime}`;
 
-    const totalSize = cluster.reduce((acc, { fill }) => acc + Math.abs(Number.parseFloat(fill.sz)), 0);
-    const totalCost = cluster.reduce((acc, { fill }) => acc + Number.parseFloat(fill.px) * Math.abs(Number.parseFloat(fill.sz)), 0);
+    const totalSize = validFillsInCluster.reduce((acc, { fill }) => acc + Math.abs(Number.parseFloat(fill.sz)), 0);
+    const totalCost = validFillsInCluster.reduce((acc, { fill }) => acc + Number.parseFloat(fill.px) * Math.abs(Number.parseFloat(fill.sz)), 0);
     const avgEntryPrice = totalSize > 0 ? totalCost / totalSize : 0;
 
     const mids = await getAllMids();
@@ -463,7 +465,7 @@ export async function detectAndSaveSignals(options: DetectOptions = {}): Promise
       ? (currentPrice - avgEntryPrice) * totalSize * (type === 'LONG' ? 1 : -1)
       : 0;
 
-    const { totalMargin, totalLeverageValue, leverageCount } = cluster.reduce(
+    const { totalMargin, totalLeverageValue, leverageCount } = validFillsInCluster.reduce(
       (acc, { fill }) => {
         const leverage = fill.leverage?.value ? Number.parseFloat(String(fill.leverage.value)) : 10;
         const fillSize = Math.abs(Number.parseFloat(fill.sz));
@@ -481,17 +483,18 @@ export async function detectAndSaveSignals(options: DetectOptions = {}): Promise
 
     const tpTargets = settings.takeProfitTargets
       .split(',')
-      .map((t) => Number.parseFloat(t.trim()))
+      .map((t) => Math.abs(Number.parseFloat(t.trim())))
       .filter(Number.isFinite);
 
     const takeProfitLevels = tpTargets.map((target) =>
       (type === 'LONG' ? avgEntryPrice * (1 + target / 100) : avgEntryPrice * (1 - target / 100)).toFixed(4)
     );
 
+    const absStopLoss = Math.abs(settings.defaultStopLoss || 2.5);
     const stopLossLevel = (
       type === 'LONG'
-        ? avgEntryPrice * (1 - settings.defaultStopLoss / 100)
-        : avgEntryPrice * (1 + settings.defaultStopLoss / 100)
+        ? avgEntryPrice * (1 - absStopLoss / 100)
+        : avgEntryPrice * (1 + absStopLoss / 100)
     ).toFixed(4);
 
     const newSignal: Signal = {
